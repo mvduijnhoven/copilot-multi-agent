@@ -162,6 +162,23 @@ The tool filter may not be initialized with actual GitHub Copilot tools, showing
 
 **Solutions:**
 
+#### Coordinator Name Configuration Issue
+**Problem**: VS Code shows error "property name is not allowed" for coordinator configuration, but runtime shows "coordinator.name: Must be 'coordinator', got 'undefined'"
+
+**Solution**: This is expected behavior. The coordinator configuration in VS Code settings should NOT include a "name" property. The extension automatically sets the name to "coordinator" when loading the configuration. Simply configure the coordinator without the name field:
+
+```json
+{
+  "copilotMultiAgent.coordinator": {
+    "systemPrompt": "Your coordinator prompt...",
+    "description": "Coordinator description",
+    "useFor": "Task orchestration and delegation",
+    "delegationPermissions": { "type": "all" },
+    "toolPermissions": { "type": "specific", "tools": ["delegateWork", "reportOut"] }
+  }
+}
+```
+
 #### Refresh Available Tools
 If you see only 2 tools available (delegation tools), try refreshing the tool discovery:
 

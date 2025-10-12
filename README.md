@@ -61,6 +61,8 @@ Enhance GitHub Copilot Chat with sophisticated multi-agent capabilities. Configu
 
 The coordinator agent orchestrates work between specialized agents. Configure it in VS Code settings:
 
+> **Note**: Do not include a "name" property in the coordinator configuration. The extension automatically sets the name to "coordinator".
+
 | Setting | Description | Default |
 |---------|-------------|---------|
 | `systemPrompt` | Defines the coordinator's behavior and capabilities | Pre-configured delegation prompt |

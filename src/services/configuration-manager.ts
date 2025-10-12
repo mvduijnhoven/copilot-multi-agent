@@ -85,10 +85,15 @@ export class ConfigurationManager implements IConfigurationManager {
       const config = vscode.workspace.getConfiguration(ConfigurationManager.CONFIGURATION_SECTION);
       
       // Load coordinator configuration
-      const coordinatorConfig = config.get<CoordinatorConfiguration>(ConfigurationManager.COORDINATOR_KEY);
+      const coordinatorConfigRaw = config.get<Omit<CoordinatorConfiguration, 'name'>>(ConfigurationManager.COORDINATOR_KEY);
       const customAgents = config.get<AgentConfiguration[]>(ConfigurationManager.CUSTOM_AGENTS_KEY, []);
       
-      // Build configuration object
+      // Build configuration object with coordinator name automatically set
+      const coordinatorConfig: CoordinatorConfiguration = coordinatorConfigRaw ? {
+        ...coordinatorConfigRaw,
+        name: 'coordinator' as const
+      } : undefined as any;
+      
       const rawConfig = {
         coordinator: coordinatorConfig,
         customAgents: customAgents || []
@@ -158,10 +163,11 @@ export class ConfigurationManager implements IConfigurationManager {
       
       const vsCodeConfig = vscode.workspace.getConfiguration(ConfigurationManager.CONFIGURATION_SECTION);
       
-      // Save coordinator configuration
+      // Save coordinator configuration (exclude name field since it's always "coordinator")
+      const { name, ...coordinatorForSaving } = configToSave.coordinator;
       await vsCodeConfig.update(
         ConfigurationManager.COORDINATOR_KEY, 
-        configToSave.coordinator, 
+        coordinatorForSaving, 
         vscode.ConfigurationTarget.Global
       );
       
