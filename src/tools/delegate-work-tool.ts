@@ -61,7 +61,8 @@ export class DelegateWorkTool implements vscode.LanguageModelTool<DelegateWorkPa
       this.validateParameters(parameters);
       
       // Check if delegation is allowed
-      if (!this.delegationEngine.isValidDelegation(this.currentAgentName, parameters.agentName)) {
+      const isValidDelegation = await this.delegationEngine.isValidDelegation(this.currentAgentName, parameters.agentName);
+      if (!isValidDelegation) {
         throw new Error(`Delegation from '${this.currentAgentName}' to '${parameters.agentName}' is not allowed. Check delegation permissions.`);
       }
 

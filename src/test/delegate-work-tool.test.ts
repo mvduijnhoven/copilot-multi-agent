@@ -33,7 +33,7 @@ class MockDelegationEngine implements DelegationEngine {
     // Mock implementation - no-op for testing
   }
 
-  isValidDelegation(fromAgent: string, toAgent: string): boolean {
+  async isValidDelegation(fromAgent: string, toAgent: string): Promise<boolean> {
     const allowedAgents = this.validDelegations.get(fromAgent);
     return allowedAgents ? allowedAgents.includes(toAgent) : false;
   }

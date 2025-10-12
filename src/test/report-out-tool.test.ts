@@ -21,7 +21,7 @@ class MockDelegationEngine implements DelegationEngine {
     this.reportedOut.set(agentName, report);
   }
 
-  isValidDelegation(fromAgent: string, toAgent: string): boolean {
+  async isValidDelegation(fromAgent: string, toAgent: string): Promise<boolean> {
     // Mock implementation - not used in reportOut tests
     return true;
   }

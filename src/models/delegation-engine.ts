@@ -29,9 +29,9 @@ export interface DelegationEngine {
    * Validates if delegation is allowed between two agents
    * @param fromAgent The agent attempting to delegate
    * @param toAgent The target agent
-   * @returns True if delegation is allowed
+   * @returns Promise resolving to true if delegation is allowed
    */
-  isValidDelegation(fromAgent: string, toAgent: string): boolean;
+  isValidDelegation(fromAgent: string, toAgent: string): Promise<boolean>;
 }
 
 export interface DelegationRequest {
