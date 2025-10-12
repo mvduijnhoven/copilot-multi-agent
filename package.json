@@ -31,73 +31,171 @@
       "properties": {
         "copilotMultiAgent.coordinator": {
           "type": "object",
-          "description": "Configuration for the coordinator agent",
+          "description": "Configuration for the coordinator agent that orchestrates work between specialized agents",
           "properties": {
             "systemPrompt": {
               "type": "string",
-              "description": "System prompt for the coordinator agent",
-              "default": "You are a coordinator agent that helps orchestrate work between specialized agents. You can delegate tasks to other agents when appropriate."
+              "description": "System prompt that defines the coordinator's behavior and capabilities",
+              "default": "You are a coordinator agent responsible for orchestrating tasks and delegating work to specialized agents. Analyze the user's request and determine if it can be handled directly or if it should be delegated to a more specialized agent.",
+              "minLength": 1,
+              "maxLength": 5000
             },
             "description": {
               "type": "string",
-              "description": "Description of the coordinator agent",
-              "default": "Coordinates work between specialized agents"
+              "description": "Brief description of the coordinator agent's purpose",
+              "default": "Coordinates work between specialized agents",
+              "minLength": 1,
+              "maxLength": 200
             },
             "useFor": {
               "type": "string",
-              "description": "What the coordinator agent should be used for",
-              "default": "Task orchestration and delegation"
+              "description": "Description of what tasks the coordinator should be used for",
+              "default": "Task orchestration and delegation",
+              "minLength": 1,
+              "maxLength": 200
             },
             "delegationPermissions": {
               "type": "object",
-              "description": "Delegation permissions for the coordinator",
+              "description": "Controls which agents the coordinator can delegate work to",
               "default": {
                 "type": "all"
-              }
+              },
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": ["all", "none", "specific"],
+                  "description": "Delegation permission type: 'all' allows delegation to any agent, 'none' disables delegation, 'specific' allows delegation to selected agents only"
+                },
+                "agents": {
+                  "type": "array",
+                  "description": "List of agent names that can be delegated to (only used when type is 'specific')",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-zA-Z0-9-_]+$",
+                    "minLength": 1,
+                    "maxLength": 50
+                  },
+                  "uniqueItems": true
+                }
+              },
+              "required": ["type"],
+              "additionalProperties": false
             },
             "toolPermissions": {
               "type": "object",
-              "description": "Tool permissions for the coordinator",
+              "description": "Controls which tools the coordinator has access to",
               "default": {
-                "type": "all"
-              }
+                "type": "specific",
+                "tools": ["delegateWork", "reportOut"]
+              },
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": ["all", "none", "specific"],
+                  "description": "Tool permission type: 'all' grants access to all tools, 'none' disables all tools, 'specific' grants access to selected tools only"
+                },
+                "tools": {
+                  "type": "array",
+                  "description": "List of tool names that can be used (only used when type is 'specific')",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "uniqueItems": true
+                }
+              },
+              "required": ["type"],
+              "additionalProperties": false
             }
-          }
+          },
+          "required": ["systemPrompt", "description", "useFor", "delegationPermissions", "toolPermissions"],
+          "additionalProperties": false
         },
         "copilotMultiAgent.customAgents": {
           "type": "array",
-          "description": "Configuration for custom agents",
+          "description": "Configuration for custom specialized agents",
           "items": {
             "type": "object",
             "properties": {
               "name": {
                 "type": "string",
-                "description": "Unique name for the agent"
+                "description": "Unique identifier for the agent (letters, numbers, hyphens, and underscores only)",
+                "pattern": "^[a-zA-Z0-9-_]+$",
+                "minLength": 1,
+                "maxLength": 50
               },
               "systemPrompt": {
                 "type": "string",
-                "description": "System prompt for the agent"
+                "description": "System prompt that defines the agent's behavior, expertise, and capabilities",
+                "minLength": 1,
+                "maxLength": 5000
               },
               "description": {
                 "type": "string",
-                "description": "Description of the agent"
+                "description": "Brief description of the agent's purpose and capabilities",
+                "minLength": 1,
+                "maxLength": 200
               },
               "useFor": {
                 "type": "string",
-                "description": "What the agent should be used for"
+                "description": "Description of what tasks or domains this agent specializes in",
+                "minLength": 1,
+                "maxLength": 200
               },
               "delegationPermissions": {
                 "type": "object",
-                "description": "Delegation permissions for the agent"
+                "description": "Controls which agents this agent can delegate work to",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["all", "none", "specific"],
+                    "description": "Delegation permission type: 'all' allows delegation to any agent, 'none' disables delegation, 'specific' allows delegation to selected agents only"
+                  },
+                  "agents": {
+                    "type": "array",
+                    "description": "List of agent names that can be delegated to (only used when type is 'specific')",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-zA-Z0-9-_]+$",
+                      "minLength": 1,
+                      "maxLength": 50
+                    },
+                    "uniqueItems": true
+                  }
+                },
+                "required": ["type"],
+                "additionalProperties": false
               },
               "toolPermissions": {
                 "type": "object",
-                "description": "Tool permissions for the agent"
+                "description": "Controls which tools this agent has access to",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["all", "none", "specific"],
+                    "description": "Tool permission type: 'all' grants access to all tools, 'none' disables all tools, 'specific' grants access to selected tools only"
+                  },
+                  "tools": {
+                    "type": "array",
+                    "description": "List of tool names that can be used (only used when type is 'specific')",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "uniqueItems": true
+                  }
+                },
+                "required": ["type"],
+                "additionalProperties": false
               }
             },
-            "required": ["name", "systemPrompt", "description", "useFor"]
+            "required": ["name", "systemPrompt", "description", "useFor", "delegationPermissions", "toolPermissions"],
+            "additionalProperties": false
           },
-          "default": []
+          "default": [],
+          "maxItems": 20
         }
       }
     }
