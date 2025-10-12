@@ -6,18 +6,101 @@
   "engines": {
     "vscode": "^1.105.0"
   },
-  "categories": [
-    "Other"
+  "extensionDependencies": [
+    "github.copilot-chat"
   ],
-  "activationEvents": [],
+  "categories": [
+    "AI",
+    "Chat"
+  ],
+  "activationEvents": [
+    "onLanguage:*"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
-    "commands": [
+    "chatParticipants": [
       {
-        "command": "copilot-multi-agent.helloWorld",
-        "title": "Hello World"
+        "id": "copilot-multi-agent.coordinator",
+        "name": "multi-agent",
+        "description": "Multi-agent coordinator for specialized AI assistance",
+        "isSticky": true
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Copilot Multi-Agent",
+      "properties": {
+        "copilotMultiAgent.coordinator": {
+          "type": "object",
+          "description": "Configuration for the coordinator agent",
+          "properties": {
+            "systemPrompt": {
+              "type": "string",
+              "description": "System prompt for the coordinator agent",
+              "default": "You are a coordinator agent that helps orchestrate work between specialized agents. You can delegate tasks to other agents when appropriate."
+            },
+            "description": {
+              "type": "string",
+              "description": "Description of the coordinator agent",
+              "default": "Coordinates work between specialized agents"
+            },
+            "useFor": {
+              "type": "string",
+              "description": "What the coordinator agent should be used for",
+              "default": "Task orchestration and delegation"
+            },
+            "delegationPermissions": {
+              "type": "object",
+              "description": "Delegation permissions for the coordinator",
+              "default": {
+                "type": "all"
+              }
+            },
+            "toolPermissions": {
+              "type": "object",
+              "description": "Tool permissions for the coordinator",
+              "default": {
+                "type": "all"
+              }
+            }
+          }
+        },
+        "copilotMultiAgent.customAgents": {
+          "type": "array",
+          "description": "Configuration for custom agents",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Unique name for the agent"
+              },
+              "systemPrompt": {
+                "type": "string",
+                "description": "System prompt for the agent"
+              },
+              "description": {
+                "type": "string",
+                "description": "Description of the agent"
+              },
+              "useFor": {
+                "type": "string",
+                "description": "What the agent should be used for"
+              },
+              "delegationPermissions": {
+                "type": "object",
+                "description": "Delegation permissions for the agent"
+              },
+              "toolPermissions": {
+                "type": "object",
+                "description": "Tool permissions for the agent"
+              }
+            },
+            "required": ["name", "systemPrompt", "description", "useFor"]
+          },
+          "default": []
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
