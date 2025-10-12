@@ -23,6 +23,14 @@ export interface ToolFilter {
     allTools: any[], // Will be typed as vscode.LanguageModelTool[] when available
     permissions: ToolPermissions
   ): any[]; // Will be typed as vscode.LanguageModelTool[] when available
+
+  /**
+   * Checks if an agent has access to a specific tool
+   * @param agentName The name of the agent
+   * @param toolName The name of the tool
+   * @returns Promise resolving to true if agent has access
+   */
+  hasToolAccess(agentName: string, toolName: string): Promise<boolean>;
 }
 
 /**
