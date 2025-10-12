@@ -1,214 +1,168 @@
+/**
+ * Unit tests for enhanced configuration validation
+ */
+
 import * as assert from 'assert';
 import { 
-  ConfigurationValidator, 
-  AgentConfiguration, 
-  CoordinatorConfiguration,
+  EnhancedConfigurationValidator,
+  ValidationOptions,
+  validateConfiguration
+} from '../services/configuration-validator';
+import { 
   ExtensionConfiguration,
-  DelegationPermissions,
-  ToolPermissions,
-  DEFAULT_COORDINATOR_CONFIG,
-  DEFAULT_EXTENSION_CONFIG
+  CoordinatorConfiguration,
+  AgentConfiguration,
+  DEFAULT_EXTENSION_CONFIG,
+  DEFAULT_COORDINATOR_CONFIG
 } from '../models/agent-configuration';
 
-suite('Configuration Validation Test Suite', () => {
-
-  suite('Agent Name Validation', () => {
-    test('should accept valid agent names', () => {
-      const validNames = ['test-agent', 'agent_1', 'MyAgent', 'agent123'];
-      
-      validNames.forEach(name => {
-        const result = ConfigurationValidator.validateAgentName(name);
-        assert.strictEqual(result.isValid, true, `Name "${name}" should be valid`);
-        assert.strictEqual(result.errors.length, 0);
-      });
-    });
-
-    test('should reject invalid agent names', () => {
-      const invalidCases = [
-        { name: '', expectedError: 'Agent name cannot be empty' },
-        { name: '   ', expectedError: 'Agent name cannot be empty' },
-        { name: 'a'.repeat(51), expectedError: 'Agent name must be 50 characters or less' },
-        { name: 'agent with spaces', expectedError: 'Agent name can only contain letters, numbers, hyphens, and underscores' },
-        { name: 'agent@special', expectedError: 'Agent name can only contain letters, numbers, hyphens, and underscores' }
-      ];
-
-      invalidCases.forEach(({ name, expectedError }) => {
-        const result = ConfigurationValidator.validateAgentName(name);
-        assert.strictEqual(result.isValid, false, `Name "${name}" should be invalid`);
-        assert.ok(result.errors.some(error => error.includes(expectedError)), 
-          `Should contain error: ${expectedError}. Got: ${result.errors.join(', ')}`);
-      });
-    });
-
-    test('should reject non-string names', () => {
-      const invalidTypes = [null, undefined, 123, {}, []];
-      
-      invalidTypes.forEach(name => {
-        const result = ConfigurationValidator.validateAgentName(name as any);
-        assert.strictEqual(result.isValid, false);
-        assert.ok(result.errors.some(error => error.includes('must be a string')));
-      });
-    });
-  });
-
-  suite('Delegation Permissions Validation', () => {
-    test('should accept valid delegation permissions', () => {
-      const validPermissions: DelegationPermissions[] = [
-        { type: 'all' },
-        { type: 'none' },
-        { type: 'specific', agents: ['agent1', 'agent2'] },
-        { type: 'specific', agents: [] }
-      ];
-
-      validPermissions.forEach(permissions => {
-        const result = ConfigurationValidator.validateDelegationPermissions(permissions);
-        assert.strictEqual(result.isValid, true, `Permissions should be valid: ${JSON.stringify(permissions)}`);
-        assert.strictEqual(result.errors.length, 0);
-      });
-    });
-
-    test('should reject invalid delegation permissions', () => {
-      const invalidCases = [
-        { permissions: null, expectedError: 'must be an object' },
-        { permissions: 'invalid', expectedError: 'must be an object' },
-        { permissions: { type: 'invalid' }, expectedError: 'must be "all", "none", or "specific"' },
-        { permissions: { type: 'specific' }, expectedError: 'must include an agents array' },
-        { permissions: { type: 'specific', agents: 'not-array' }, expectedError: 'must include an agents array' },
-        { permissions: { type: 'specific', agents: ['', 'valid'] }, expectedError: 'must be a non-empty string' }
-      ];
-
-      invalidCases.forEach(({ permissions, expectedError }) => {
-        const result = ConfigurationValidator.validateDelegationPermissions(permissions);
-        assert.strictEqual(result.isValid, false);
-        assert.ok(result.errors.some(error => error.includes(expectedError)), 
-          `Should contain error: ${expectedError}. Got: ${result.errors.join(', ')}`);
-      });
-    });
-  });
-
-  suite('Tool Permissions Validation', () => {
-    test('should accept valid tool permissions', () => {
-      const validPermissions: ToolPermissions[] = [
-        { type: 'all' },
-        { type: 'none' },
-        { type: 'specific', tools: ['tool1', 'tool2'] },
-        { type: 'specific', tools: [] }
-      ];
-
-      validPermissions.forEach(permissions => {
-        const result = ConfigurationValidator.validateToolPermissions(permissions);
-        assert.strictEqual(result.isValid, true, `Permissions should be valid: ${JSON.stringify(permissions)}`);
-        assert.strictEqual(result.errors.length, 0);
-      });
-    });
-
-    test('should reject invalid tool permissions', () => {
-      const invalidCases = [
-        { permissions: null, expectedError: 'must be an object' },
-        { permissions: 'invalid', expectedError: 'must be an object' },
-        { permissions: { type: 'invalid' }, expectedError: 'must be "all", "none", or "specific"' },
-        { permissions: { type: 'specific' }, expectedError: 'must include a tools array' },
-        { permissions: { type: 'specific', tools: 'not-array' }, expectedError: 'must include a tools array' },
-        { permissions: { type: 'specific', tools: ['', 'valid'] }, expectedError: 'must be a non-empty string' }
-      ];
-
-      invalidCases.forEach(({ permissions, expectedError }) => {
-        const result = ConfigurationValidator.validateToolPermissions(permissions);
-        assert.strictEqual(result.isValid, false);
-        assert.ok(result.errors.some(error => error.includes(expectedError)), 
-          `Should contain error: ${expectedError}. Got: ${result.errors.join(', ')}`);
-      });
-    });
-  });
-
-  suite('Agent Configuration Validation', () => {
-    test('should accept valid agent configuration', () => {
-      const validConfig: AgentConfiguration = {
-        name: 'test-agent',
-        systemPrompt: 'You are a test agent',
-        description: 'A test agent for validation',
-        useFor: 'Testing purposes',
-        delegationPermissions: { type: 'none' },
-        toolPermissions: { type: 'all' }
-      };
-
-      const result = ConfigurationValidator.validateAgentConfiguration(validConfig);
-      assert.strictEqual(result.isValid, true);
-      assert.strictEqual(result.errors.length, 0);
-    });
-
-    test('should reject agent configuration with missing fields', () => {
-      const incompleteConfig = {
-        name: 'test-agent',
-        systemPrompt: 'You are a test agent'
-        // Missing description, useFor, delegationPermissions, toolPermissions
-      };
-
-      const result = ConfigurationValidator.validateAgentConfiguration(incompleteConfig);
-      assert.strictEqual(result.isValid, false);
-      assert.ok(result.errors.some(error => error.includes('description')));
-      assert.ok(result.errors.some(error => error.includes('useFor')));
-    });
-
-    test('should reject agent configuration with empty string fields', () => {
-      const configWithEmptyFields = {
-        name: 'test-agent',
-        systemPrompt: '',
-        description: '   ',
-        useFor: 'Testing',
-        delegationPermissions: { type: 'none' },
-        toolPermissions: { type: 'all' }
-      };
-
-      const result = ConfigurationValidator.validateAgentConfiguration(configWithEmptyFields);
-      assert.strictEqual(result.isValid, false);
-      assert.ok(result.errors.some(error => error.includes('systemPrompt')));
-      assert.ok(result.errors.some(error => error.includes('description')));
-    });
-  });
-
-  suite('Coordinator Configuration Validation', () => {
-    test('should accept valid coordinator configuration', () => {
-      const result = ConfigurationValidator.validateCoordinatorConfiguration(DEFAULT_COORDINATOR_CONFIG);
-      assert.strictEqual(result.isValid, true);
-      assert.strictEqual(result.errors.length, 0);
-    });
-
-    test('should reject coordinator with wrong name', () => {
-      const invalidCoordinator = {
-        ...DEFAULT_COORDINATOR_CONFIG,
-        name: 'wrong-name'
-      };
-
-      const result = ConfigurationValidator.validateCoordinatorConfiguration(invalidCoordinator);
-      assert.strictEqual(result.isValid, false);
-      assert.ok(result.errors.some(error => error.includes('Coordinator name must be "coordinator"')));
-    });
-  });
-
-  suite('Extension Configuration Validation', () => {
-    test('should accept valid extension configuration', () => {
-      const result = ConfigurationValidator.validateExtensionConfiguration(DEFAULT_EXTENSION_CONFIG);
-      assert.strictEqual(result.isValid, true);
-      assert.strictEqual(result.errors.length, 0);
-    });
-
-    test('should accept extension configuration with custom agents', () => {
-      const configWithAgents: ExtensionConfiguration = {
-        coordinator: DEFAULT_COORDINATOR_CONFIG,
+suite('Enhanced Configuration Validation Tests', () => {
+  
+  suite('Basic Validation', () => {
+    test('should validate valid configuration', () => {
+      const validConfig: ExtensionConfiguration = {
+        coordinator: {
+          name: 'coordinator',
+          systemPrompt: 'You are a coordinator agent responsible for task orchestration.',
+          description: 'Coordinates work between agents',
+          useFor: 'Task orchestration and delegation',
+          delegationPermissions: { type: 'all' },
+          toolPermissions: { type: 'specific', tools: ['delegateWork', 'reportOut'] }
+        },
         customAgents: [
           {
             name: 'code-reviewer',
-            systemPrompt: 'You are a code reviewer',
-            description: 'Reviews code for quality',
-            useFor: 'Code review',
+            systemPrompt: 'You are a code review specialist focused on quality and best practices.',
+            description: 'Specialized in code review',
+            useFor: 'Code review and quality analysis',
             delegationPermissions: { type: 'none' },
             toolPermissions: { type: 'specific', tools: ['reportOut'] }
+          }
+        ]
+      };
+
+      const result = EnhancedConfigurationValidator.validateWithContext(validConfig);
+      assert.strictEqual(result.isValid, true, `Validation should pass: ${result.errors.join(', ')}`);
+      assert.strictEqual(result.errors.length, 0);
+    });
+
+    test('should reject null or undefined configuration', () => {
+      const nullResult = EnhancedConfigurationValidator.validateWithContext(null);
+      assert.strictEqual(nullResult.isValid, false);
+      assert.ok(nullResult.errors.some(error => error.includes('must be a valid configuration object')));
+
+      const undefinedResult = EnhancedConfigurationValidator.validateWithContext(undefined);
+      assert.strictEqual(undefinedResult.isValid, false);
+      assert.ok(undefinedResult.errors.some(error => error.includes('must be a valid configuration object')));
+    });
+
+    test('should reject non-object configuration', () => {
+      const stringResult = EnhancedConfigurationValidator.validateWithContext('invalid');
+      assert.strictEqual(stringResult.isValid, false);
+      assert.ok(stringResult.errors.some(error => error.includes('must be a valid configuration object')));
+
+      const numberResult = EnhancedConfigurationValidator.validateWithContext(123);
+      assert.strictEqual(numberResult.isValid, false);
+      assert.ok(numberResult.errors.some(error => error.includes('must be a valid configuration object')));
+    });
+  });
+
+  suite('Coordinator Validation', () => {
+    test('should validate coordinator name requirement', () => {
+      const config = {
+        coordinator: {
+          name: 'wrong-name',
+          systemPrompt: 'Test prompt',
+          description: 'Test description',
+          useFor: 'Testing',
+          delegationPermissions: { type: 'all' },
+          toolPermissions: { type: 'all' }
+        },
+        customAgents: []
+      };
+
+      const result = EnhancedConfigurationValidator.validateWithContext(config);
+      assert.strictEqual(result.isValid, false);
+      assert.ok(result.errors.some(error => error.includes('Must be "coordinator"')));
+    });
+
+    test('should validate coordinator required fields', () => {
+      const config = {
+        coordinator: {
+          name: 'coordinator'
+          // Missing required fields
+        },
+        customAgents: []
+      };
+
+      const result = EnhancedConfigurationValidator.validateWithContext(config);
+      assert.strictEqual(result.isValid, false);
+      assert.ok(result.errors.some(error => error.includes('System prompt is required')));
+      assert.ok(result.errors.some(error => error.includes('Description is required')));
+      assert.ok(result.errors.some(error => error.includes('Use for description is required')));
+    });
+
+    test('should validate coordinator system prompt length', () => {
+      const shortPrompt = {
+        coordinator: {
+          name: 'coordinator',
+          systemPrompt: 'Short',
+          description: 'Test description',
+          useFor: 'Testing',
+          delegationPermissions: { type: 'all' },
+          toolPermissions: { type: 'all' }
+        },
+        customAgents: []
+      };
+
+      const shortResult = EnhancedConfigurationValidator.validateWithContext(shortPrompt);
+      assert.strictEqual(shortResult.isValid, false);
+      assert.ok(shortResult.errors.some(error => error.includes('Too short')));
+
+      const longPrompt = {
+        coordinator: {
+          name: 'coordinator',
+          systemPrompt: 'x'.repeat(5001),
+          description: 'Test description',
+          useFor: 'Testing',
+          delegationPermissions: { type: 'all' },
+          toolPermissions: { type: 'all' }
+        },
+        customAgents: []
+      };
+
+      const longResult = EnhancedConfigurationValidator.validateWithContext(longPrompt);
+      assert.strictEqual(longResult.isValid, false);
+      assert.ok(longResult.errors.some(error => error.includes('Too long')));
+    });
+
+    test('should use defaults for missing coordinator when allowDefaults is true', () => {
+      const config = {
+        customAgents: []
+      };
+
+      const result = EnhancedConfigurationValidator.validateWithContext(config, 'test', { allowDefaults: true });
+      assert.strictEqual(result.isValid, true);
+    });
+  });
+
+  suite('Custom Agents Validation', () => {
+    test('should validate agent name uniqueness', () => {
+      const config = {
+        coordinator: DEFAULT_COORDINATOR_CONFIG,
+        customAgents: [
+          {
+            name: 'test-agent',
+            systemPrompt: 'Test prompt for agent 1',
+            description: 'Test description',
+            useFor: 'Testing',
+            delegationPermissions: { type: 'none' },
+            toolPermissions: { type: 'all' }
           },
           {
-            name: 'tester',
-            systemPrompt: 'You are a testing specialist',
-            description: 'Creates and runs tests',
+            name: 'test-agent', // Duplicate name
+            systemPrompt: 'Test prompt for agent 2',
+            description: 'Test description',
             useFor: 'Testing',
             delegationPermissions: { type: 'none' },
             toolPermissions: { type: 'all' }
@@ -216,135 +170,549 @@ suite('Configuration Validation Test Suite', () => {
         ]
       };
 
-      const result = ConfigurationValidator.validateExtensionConfiguration(configWithAgents);
-      assert.strictEqual(result.isValid, true);
-      assert.strictEqual(result.errors.length, 0);
-    });
-
-    test('should reject configuration with duplicate agent names', () => {
-      const configWithDuplicates: ExtensionConfiguration = {
-        coordinator: DEFAULT_COORDINATOR_CONFIG,
-        customAgents: [
-          {
-            name: 'duplicate',
-            systemPrompt: 'First agent',
-            description: 'First',
-            useFor: 'First',
-            delegationPermissions: { type: 'none' },
-            toolPermissions: { type: 'all' }
-          },
-          {
-            name: 'duplicate',
-            systemPrompt: 'Second agent',
-            description: 'Second',
-            useFor: 'Second',
-            delegationPermissions: { type: 'none' },
-            toolPermissions: { type: 'all' }
-          }
-        ]
-      };
-
-      const result = ConfigurationValidator.validateExtensionConfiguration(configWithDuplicates);
+      const result = EnhancedConfigurationValidator.validateWithContext(config);
       assert.strictEqual(result.isValid, false);
       assert.ok(result.errors.some(error => error.includes('Duplicate agent name')));
     });
 
-    test('should reject configuration with agent named "coordinator"', () => {
-      const configWithCoordinatorName: ExtensionConfiguration = {
+    test('should reject coordinator name for custom agents', () => {
+      const config = {
         coordinator: DEFAULT_COORDINATOR_CONFIG,
         customAgents: [
           {
             name: 'coordinator',
-            systemPrompt: 'Invalid agent',
-            description: 'Should not be allowed',
-            useFor: 'Invalid',
+            systemPrompt: 'Test prompt',
+            description: 'Test description',
+            useFor: 'Testing',
             delegationPermissions: { type: 'none' },
             toolPermissions: { type: 'all' }
           }
         ]
       };
 
-      const result = ConfigurationValidator.validateExtensionConfiguration(configWithCoordinatorName);
+      const result = EnhancedConfigurationValidator.validateWithContext(config);
       assert.strictEqual(result.isValid, false);
-      assert.ok(result.errors.some(error => error.includes('Duplicate agent name "coordinator"')));
+      assert.ok(result.errors.some(error => error.includes('Cannot use reserved name "coordinator"')));
     });
 
-    test('should reject configuration with invalid delegation references', () => {
-      const configWithInvalidRefs: ExtensionConfiguration = {
+    test('should validate agent name format', () => {
+      const invalidNames = [
+        'agent with spaces',
+        'agent@special',
+        'agent.with.dots',
+        '',
+        'x'.repeat(51)
+      ];
+
+      invalidNames.forEach(invalidName => {
+        const config = {
+          coordinator: DEFAULT_COORDINATOR_CONFIG,
+          customAgents: [
+            {
+              name: invalidName,
+              systemPrompt: 'Test prompt',
+              description: 'Test description',
+              useFor: 'Testing',
+              delegationPermissions: { type: 'none' },
+              toolPermissions: { type: 'all' }
+            }
+          ]
+        };
+
+        const result = EnhancedConfigurationValidator.validateWithContext(config);
+        assert.strictEqual(result.isValid, false, `Should reject invalid name: "${invalidName}"`);
+      });
+    });
+
+    test('should validate agent count limits', () => {
+      const tooManyAgents = Array.from({ length: 21 }, (_, i) => ({
+        name: `agent-${i}`,
+        systemPrompt: 'Test prompt',
+        description: 'Test description',
+        useFor: 'Testing',
+        delegationPermissions: { type: 'none' },
+        toolPermissions: { type: 'all' }
+      }));
+
+      const config = {
+        coordinator: DEFAULT_COORDINATOR_CONFIG,
+        customAgents: tooManyAgents
+      };
+
+      const result = EnhancedConfigurationValidator.validateWithContext(config);
+      assert.strictEqual(result.isValid, false);
+      assert.ok(result.errors.some(error => error.includes('Too many agents')));
+    });
+  });
+
+  suite('Permission Validation', () => {
+    test('should validate delegation permissions structure', () => {
+      const invalidPermissions = [
+        'string',
+        123,
+        { type: 'invalid' },
+        { type: 'specific' }, // Missing agents array
+        { type: 'specific', agents: 'not-array' },
+        { type: 'specific', agents: [] }, // Empty array
+        { type: 'specific', agents: ['', 'valid-agent'] } // Empty string in array
+      ];
+
+      invalidPermissions.forEach((permissions, index) => {
+        const config = {
+          coordinator: {
+            name: 'coordinator',
+            systemPrompt: 'Test prompt',
+            description: 'Test description',
+            useFor: 'Testing',
+            delegationPermissions: permissions,
+            toolPermissions: { type: 'all' }
+          },
+          customAgents: []
+        };
+
+        const result = EnhancedConfigurationValidator.validateWithContext(config, 'test', { allowDefaults: false });
+        assert.strictEqual(result.isValid, false, `Should reject invalid delegation permissions at index ${index}`);
+      });
+    });
+
+    test('should handle null/undefined delegation permissions based on allowDefaults', () => {
+      const configWithNullPermissions = {
         coordinator: {
-          ...DEFAULT_COORDINATOR_CONFIG,
-          delegationPermissions: { type: 'specific', agents: ['non-existent-agent'] }
+          name: 'coordinator',
+          systemPrompt: 'Test prompt',
+          description: 'Test description',
+          useFor: 'Testing',
+          delegationPermissions: null,
+          toolPermissions: { type: 'all' }
+        },
+        customAgents: []
+      };
+
+      // With allowDefaults, null permissions should be handled gracefully
+      const withDefaultsResult = EnhancedConfigurationValidator.validateWithContext(
+        configWithNullPermissions, 
+        'test', 
+        { allowDefaults: true, migrateConfig: false }
+      );
+      // Should not fail due to null permissions when defaults are allowed
+      const hasPermissionError = withDefaultsResult.errors.some(error => 
+        error.includes('Delegation permissions are required')
+      );
+      assert.strictEqual(hasPermissionError, false, 'Should not require permissions when allowDefaults is true');
+
+      // Without allowDefaults, null permissions should fail
+      const withoutDefaultsResult = EnhancedConfigurationValidator.validateWithContext(
+        configWithNullPermissions, 
+        'test', 
+        { allowDefaults: false, migrateConfig: false }
+      );
+      assert.strictEqual(withoutDefaultsResult.isValid, false, 'Should be invalid without allowDefaults');
+    });
+
+    test('should validate tool permissions structure', () => {
+      const invalidPermissions = [
+        'string',
+        123,
+        { type: 'invalid' },
+        { type: 'specific' }, // Missing tools array
+        { type: 'specific', tools: 'not-array' },
+        { type: 'specific', tools: [] }, // Empty array
+        { type: 'specific', tools: ['', 'valid-tool'] } // Empty string in array
+      ];
+
+      invalidPermissions.forEach((permissions, index) => {
+        const config = {
+          coordinator: {
+            name: 'coordinator',
+            systemPrompt: 'Test prompt',
+            description: 'Test description',
+            useFor: 'Testing',
+            delegationPermissions: { type: 'all' },
+            toolPermissions: permissions
+          },
+          customAgents: []
+        };
+
+        const result = EnhancedConfigurationValidator.validateWithContext(config, 'test', { allowDefaults: false });
+        assert.strictEqual(result.isValid, false, `Should reject invalid tool permissions at index ${index}`);
+      });
+    });
+
+    test('should handle null/undefined tool permissions based on allowDefaults', () => {
+      const configWithNullPermissions = {
+        coordinator: {
+          name: 'coordinator',
+          systemPrompt: 'Test prompt',
+          description: 'Test description',
+          useFor: 'Testing',
+          delegationPermissions: { type: 'all' },
+          toolPermissions: null
+        },
+        customAgents: []
+      };
+
+      // With allowDefaults, null permissions should be handled gracefully
+      const withDefaultsResult = EnhancedConfigurationValidator.validateWithContext(
+        configWithNullPermissions, 
+        'test', 
+        { allowDefaults: true, migrateConfig: false }
+      );
+      // Should not fail due to null permissions when defaults are allowed
+      const hasPermissionError = withDefaultsResult.errors.some(error => 
+        error.includes('Tool permissions are required')
+      );
+      assert.strictEqual(hasPermissionError, false, 'Should not require permissions when allowDefaults is true');
+
+      // Without allowDefaults, null permissions should fail
+      const withoutDefaultsResult = EnhancedConfigurationValidator.validateWithContext(
+        configWithNullPermissions, 
+        'test', 
+        { allowDefaults: false, migrateConfig: false }
+      );
+      assert.strictEqual(withoutDefaultsResult.isValid, false, 'Should be invalid without allowDefaults');
+    });
+
+    test('should detect duplicate agents in delegation permissions', () => {
+      const config = {
+        coordinator: {
+          name: 'coordinator',
+          systemPrompt: 'Test prompt',
+          description: 'Test description',
+          useFor: 'Testing',
+          delegationPermissions: { 
+            type: 'specific', 
+            agents: ['agent1', 'agent2', 'agent1'] // Duplicate
+          },
+          toolPermissions: { type: 'all' }
+        },
+        customAgents: []
+      };
+
+      const result = EnhancedConfigurationValidator.validateWithContext(config);
+      assert.strictEqual(result.isValid, false);
+      assert.ok(result.errors.some(error => error.includes('duplicate agent names')));
+    });
+
+    test('should detect duplicate tools in tool permissions', () => {
+      const config = {
+        coordinator: {
+          name: 'coordinator',
+          systemPrompt: 'Test prompt',
+          description: 'Test description',
+          useFor: 'Testing',
+          delegationPermissions: { type: 'all' },
+          toolPermissions: { 
+            type: 'specific', 
+            tools: ['tool1', 'tool2', 'tool1'] // Duplicate
+          }
+        },
+        customAgents: []
+      };
+
+      const result = EnhancedConfigurationValidator.validateWithContext(config);
+      assert.strictEqual(result.isValid, false);
+      assert.ok(result.errors.some(error => error.includes('duplicate tool names')));
+    });
+  });
+
+  suite('Cross-Reference Validation', () => {
+    test('should detect non-existent agent references in delegation permissions', () => {
+      const config = {
+        coordinator: {
+          name: 'coordinator',
+          systemPrompt: 'Test prompt',
+          description: 'Test description',
+          useFor: 'Testing',
+          delegationPermissions: { 
+            type: 'specific', 
+            agents: ['non-existent-agent'] 
+          },
+          toolPermissions: { type: 'all' }
+        },
+        customAgents: []
+      };
+
+      const result = EnhancedConfigurationValidator.validateWithContext(config);
+      assert.strictEqual(result.isValid, false);
+      assert.ok(result.errors.some(error => error.includes('References non-existent agent')));
+    });
+
+    test('should validate agent references exist', () => {
+      const config = {
+        coordinator: {
+          name: 'coordinator',
+          systemPrompt: 'Test prompt',
+          description: 'Test description',
+          useFor: 'Testing',
+          delegationPermissions: { 
+            type: 'specific', 
+            agents: ['existing-agent'] 
+          },
+          toolPermissions: { type: 'all' }
         },
         customAgents: [
           {
-            name: 'valid-agent',
-            systemPrompt: 'Valid agent',
-            description: 'Valid',
-            useFor: 'Valid',
-            delegationPermissions: { type: 'specific', agents: ['another-non-existent'] },
+            name: 'existing-agent',
+            systemPrompt: 'Test prompt',
+            description: 'Test description',
+            useFor: 'Testing',
+            delegationPermissions: { type: 'none' },
             toolPermissions: { type: 'all' }
           }
         ]
       };
 
-      const result = ConfigurationValidator.validateExtensionConfiguration(configWithInvalidRefs);
-      assert.strictEqual(result.isValid, false);
-      assert.ok(result.errors.some(error => error.includes('References non-existent agent "non-existent-agent"')));
-      assert.ok(result.errors.some(error => error.includes('References non-existent agent "another-non-existent"')));
+      const result = EnhancedConfigurationValidator.validateWithContext(config);
+      assert.strictEqual(result.isValid, true, `Should validate existing references: ${result.errors.join(', ')}`);
     });
+  });
 
-    test('should accept configuration with valid delegation references', () => {
-      const configWithValidRefs: ExtensionConfiguration = {
+  suite('Circular Delegation Detection', () => {
+    test('should detect simple circular delegation', () => {
+      const config = {
         coordinator: {
-          ...DEFAULT_COORDINATOR_CONFIG,
-          delegationPermissions: { type: 'specific', agents: ['agent1', 'agent2'] }
+          name: 'coordinator',
+          systemPrompt: 'Test prompt',
+          description: 'Test description',
+          useFor: 'Testing',
+          delegationPermissions: { type: 'specific', agents: ['agent1'] },
+          toolPermissions: { type: 'all' }
         },
         customAgents: [
           {
             name: 'agent1',
-            systemPrompt: 'Agent 1',
-            description: 'First agent',
-            useFor: 'First tasks',
+            systemPrompt: 'Test prompt',
+            description: 'Test description',
+            useFor: 'Testing',
+            delegationPermissions: { type: 'specific', agents: ['coordinator'] },
+            toolPermissions: { type: 'all' }
+          }
+        ]
+      };
+
+      const result = EnhancedConfigurationValidator.validateWithContext(config);
+      assert.strictEqual(result.isValid, false);
+      assert.ok(result.errors.some(error => error.includes('circular delegation')));
+    });
+
+    test('should detect complex circular delegation', () => {
+      const config = {
+        coordinator: {
+          name: 'coordinator',
+          systemPrompt: 'Test prompt',
+          description: 'Test description',
+          useFor: 'Testing',
+          delegationPermissions: { type: 'specific', agents: ['agent1'] },
+          toolPermissions: { type: 'all' }
+        },
+        customAgents: [
+          {
+            name: 'agent1',
+            systemPrompt: 'Test prompt',
+            description: 'Test description',
+            useFor: 'Testing',
             delegationPermissions: { type: 'specific', agents: ['agent2'] },
             toolPermissions: { type: 'all' }
           },
           {
             name: 'agent2',
-            systemPrompt: 'Agent 2',
-            description: 'Second agent',
-            useFor: 'Second tasks',
+            systemPrompt: 'Test prompt',
+            description: 'Test description',
+            useFor: 'Testing',
+            delegationPermissions: { type: 'specific', agents: ['coordinator'] },
+            toolPermissions: { type: 'all' }
+          }
+        ]
+      };
+
+      const result = EnhancedConfigurationValidator.validateWithContext(config);
+      assert.strictEqual(result.isValid, false);
+      assert.ok(result.errors.some(error => error.includes('circular delegation')));
+    });
+
+    test('should allow valid delegation chains', () => {
+      const config = {
+        coordinator: {
+          name: 'coordinator',
+          systemPrompt: 'Test prompt',
+          description: 'Test description',
+          useFor: 'Testing',
+          delegationPermissions: { type: 'specific', agents: ['agent1'] },
+          toolPermissions: { type: 'all' }
+        },
+        customAgents: [
+          {
+            name: 'agent1',
+            systemPrompt: 'Test prompt',
+            description: 'Test description',
+            useFor: 'Testing',
+            delegationPermissions: { type: 'specific', agents: ['agent2'] },
+            toolPermissions: { type: 'all' }
+          },
+          {
+            name: 'agent2',
+            systemPrompt: 'Test prompt',
+            description: 'Test description',
+            useFor: 'Testing',
+            delegationPermissions: { type: 'none' }, // No circular reference
+            toolPermissions: { type: 'all' }
+          }
+        ]
+      };
+
+      const result = EnhancedConfigurationValidator.validateWithContext(config);
+      assert.strictEqual(result.isValid, true, `Should allow valid delegation chains: ${result.errors.join(', ')}`);
+    });
+  });
+
+  suite('Configuration Migration', () => {
+    test('should migrate configuration without version', () => {
+      const configWithoutVersion = {
+        coordinator: DEFAULT_COORDINATOR_CONFIG,
+        customAgents: []
+      };
+
+      const migrationResult = EnhancedConfigurationValidator.migrateConfiguration(configWithoutVersion);
+      assert.strictEqual(migrationResult.migrated, true);
+      assert.ok(migrationResult.changes.some(change => change.includes('Added version field')));
+      assert.strictEqual(migrationResult.config.version, '1.0.0');
+    });
+
+    test('should migrate missing coordinator', () => {
+      const configWithoutCoordinator = {
+        customAgents: []
+      };
+
+      const migrationResult = EnhancedConfigurationValidator.migrateConfiguration(configWithoutCoordinator);
+      assert.strictEqual(migrationResult.migrated, true);
+      assert.ok(migrationResult.changes.some(change => change.includes('Added default coordinator')));
+      assert.ok(migrationResult.config.coordinator);
+    });
+
+    test('should migrate non-array customAgents', () => {
+      const configWithInvalidAgents = {
+        coordinator: DEFAULT_COORDINATOR_CONFIG,
+        customAgents: null
+      };
+
+      const migrationResult = EnhancedConfigurationValidator.migrateConfiguration(configWithInvalidAgents);
+      assert.strictEqual(migrationResult.migrated, true);
+      assert.ok(migrationResult.changes.some(change => change.includes('Initialized custom agents array')));
+      assert.ok(Array.isArray(migrationResult.config.customAgents));
+    });
+  });
+
+  suite('Default Configuration', () => {
+    test('should provide valid default configuration', () => {
+      const defaultConfig = EnhancedConfigurationValidator.getDefaultConfiguration();
+      const result = EnhancedConfigurationValidator.validateWithContext(defaultConfig);
+      
+      assert.strictEqual(result.isValid, true, `Default config should be valid: ${result.errors.join(', ')}`);
+      assert.ok(defaultConfig.coordinator);
+      assert.ok(Array.isArray(defaultConfig.customAgents));
+    });
+
+    test('should apply defaults to partial configuration', () => {
+      const partialConfig: Partial<ExtensionConfiguration> = {
+        customAgents: [
+          {
+            name: 'test-agent',
+            systemPrompt: 'Test prompt',
+            description: 'Test description',
+            useFor: 'Testing',
             delegationPermissions: { type: 'none' },
             toolPermissions: { type: 'all' }
           }
         ]
       };
 
-      const result = ConfigurationValidator.validateExtensionConfiguration(configWithValidRefs);
-      assert.strictEqual(result.isValid, true);
-      assert.strictEqual(result.errors.length, 0);
+      const configWithDefaults = EnhancedConfigurationValidator.applyDefaults(partialConfig);
+      assert.ok(configWithDefaults.coordinator);
+      assert.strictEqual(configWithDefaults.customAgents.length, 1);
+      assert.strictEqual(configWithDefaults.customAgents[0].name, 'test-agent');
     });
   });
 
-  suite('Default Configurations', () => {
-    test('default coordinator configuration should be valid', () => {
-      const result = ConfigurationValidator.validateCoordinatorConfiguration(DEFAULT_COORDINATOR_CONFIG);
+  suite('Validation Options', () => {
+    test('should respect strict validation option', () => {
+      const invalidConfig = {
+        coordinator: {
+          name: 'coordinator',
+          systemPrompt: 'x', // Too short
+          description: 'Test',
+          useFor: 'Test',
+          delegationPermissions: { type: 'all' },
+          toolPermissions: { type: 'all' }
+        },
+        customAgents: []
+      };
+
+      const strictResult = EnhancedConfigurationValidator.validateWithContext(
+        invalidConfig, 
+        'test', 
+        { strict: true }
+      );
+      assert.strictEqual(strictResult.isValid, false);
+
+      const lenientResult = EnhancedConfigurationValidator.validateWithContext(
+        invalidConfig, 
+        'test', 
+        { strict: false }
+      );
+      // Even in lenient mode, some errors should still be caught
+      assert.strictEqual(lenientResult.isValid, false);
+    });
+
+    test('should respect allowDefaults option', () => {
+      // Test with missing coordinator - should be valid with allowDefaults
+      const configMissingCoordinator = {
+        customAgents: []
+      };
+
+      const withDefaultsResult = EnhancedConfigurationValidator.validateWithContext(
+        configMissingCoordinator, 
+        'test', 
+        { allowDefaults: true, migrateConfig: false }
+      );
+      
+      // Should not have coordinator-specific errors when allowDefaults is true
+      const hasCoordinatorError = withDefaultsResult.errors.some(error => 
+        error.includes('Coordinator configuration is required')
+      );
+      assert.strictEqual(hasCoordinatorError, false, 'Should not have coordinator error when allowDefaults is true');
+
+      // Test without allowDefaults - should fail
+      const withoutDefaultsResult = EnhancedConfigurationValidator.validateWithContext(
+        configMissingCoordinator, 
+        'test', 
+        { allowDefaults: false, migrateConfig: false }
+      );
+      assert.strictEqual(withoutDefaultsResult.isValid, false, 'Should be invalid without allowDefaults');
+      
+      // Should have coordinator error when allowDefaults is false
+      const hasCoordinatorErrorWithoutDefaults = withoutDefaultsResult.errors.some(error => 
+        error.includes('Coordinator configuration is required')
+      );
+      assert.strictEqual(hasCoordinatorErrorWithoutDefaults, true, 'Should have coordinator error when allowDefaults is false');
+    });
+  });
+
+  suite('Utility Functions', () => {
+    test('validateConfiguration utility should work', async () => {
+      const validConfig = DEFAULT_EXTENSION_CONFIG;
+      const result = await validateConfiguration(validConfig);
+      
       assert.strictEqual(result.isValid, true);
+      assert.ok(result.config);
       assert.strictEqual(result.errors.length, 0);
     });
 
-    test('default extension configuration should be valid', () => {
-      const result = ConfigurationValidator.validateExtensionConfiguration(DEFAULT_EXTENSION_CONFIG);
-      assert.strictEqual(result.isValid, true);
-      assert.strictEqual(result.errors.length, 0);
-    });
-
-    test('default coordinator should have correct properties', () => {
-      assert.strictEqual(DEFAULT_COORDINATOR_CONFIG.name, 'coordinator');
-      assert.ok(DEFAULT_COORDINATOR_CONFIG.systemPrompt.length > 0);
-      assert.ok(DEFAULT_COORDINATOR_CONFIG.description.length > 0);
-      assert.ok(DEFAULT_COORDINATOR_CONFIG.useFor.length > 0);
-      assert.strictEqual(DEFAULT_COORDINATOR_CONFIG.delegationPermissions.type, 'all');
-      assert.strictEqual(DEFAULT_COORDINATOR_CONFIG.toolPermissions.type, 'specific');
+    test('validateConfiguration should handle invalid config', async () => {
+      const invalidConfig = { invalid: 'config' };
+      const result = await validateConfiguration(invalidConfig);
+      
+      assert.ok(result.config); // Should return fixed config
+      assert.ok(result.warnings.length > 0); // Should have warnings about using defaults
     });
   });
 });

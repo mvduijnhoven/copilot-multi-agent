@@ -28,6 +28,7 @@ export type ToolPermissions =
 export interface ExtensionConfiguration {
   coordinator: CoordinatorConfiguration;
   customAgents: AgentConfiguration[];
+  version?: string;
 }
 
 export interface AgentExecutionContext {

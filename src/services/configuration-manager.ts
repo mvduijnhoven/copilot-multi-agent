@@ -11,6 +11,12 @@ import {
   DEFAULT_EXTENSION_CONFIG,
   ValidationResult
 } from '../models';
+import { 
+  EnhancedConfigurationValidator,
+  validateConfiguration
+} from './configuration-validator';
+import { ErrorHandler, createErrorContext } from './error-handler';
+import { ConfigurationError } from '../models/errors';
 
 export interface IConfigurationManager {
   /**
@@ -73,6 +79,8 @@ export class ConfigurationManager implements IConfigurationManager {
    * Loads the current configuration from VS Code settings
    */
   async loadConfiguration(): Promise<ExtensionConfiguration> {
+    const errorHandler = ErrorHandler.getInstance();
+    
     try {
       const config = vscode.workspace.getConfiguration(ConfigurationManager.CONFIGURATION_SECTION);
       
@@ -81,23 +89,45 @@ export class ConfigurationManager implements IConfigurationManager {
       const customAgents = config.get<AgentConfiguration[]>(ConfigurationManager.CUSTOM_AGENTS_KEY, []);
       
       // Build configuration object
-      const extensionConfig: ExtensionConfiguration = {
-        coordinator: coordinatorConfig || DEFAULT_EXTENSION_CONFIG.coordinator,
+      const rawConfig = {
+        coordinator: coordinatorConfig,
         customAgents: customAgents || []
       };
       
-      // Validate the loaded configuration
-      const validation = ConfigurationValidator.validateExtensionConfiguration(extensionConfig);
-      if (!validation.isValid) {
-        console.warn('Invalid configuration loaded from settings:', validation.errors);
-        // Return default configuration if current is invalid
-        return DEFAULT_EXTENSION_CONFIG;
+      // Use enhanced validation with error handling and migration
+      const validationResult = await validateConfiguration(rawConfig, 'loadConfiguration');
+      
+      if (!validationResult.isValid) {
+        // Log validation errors
+        await errorHandler.handleError(
+          new ConfigurationError(`Configuration validation failed: ${validationResult.errors.join(', ')}`),
+          createErrorContext(undefined, undefined, 'loadConfiguration', { 
+            errors: validationResult.errors,
+            warnings: validationResult.warnings 
+          }),
+          { notifyUser: false }
+        );
       }
       
-      return extensionConfig;
+      // Log warnings if any
+      if (validationResult.warnings.length > 0) {
+        console.warn('Configuration warnings:', validationResult.warnings);
+      }
+      
+      return validationResult.config;
+      
     } catch (error) {
-      console.error('Error loading configuration:', error);
-      return DEFAULT_EXTENSION_CONFIG;
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Error loading configuration:', errorMessage);
+      
+      // Handle error and return default configuration
+      await errorHandler.handleError(
+        new ConfigurationError(`Failed to load configuration: ${errorMessage}`),
+        createErrorContext(undefined, undefined, 'loadConfiguration'),
+        { notifyUser: false }
+      );
+      
+      return EnhancedConfigurationValidator.getDefaultConfiguration();
     }
   }
 
@@ -105,31 +135,60 @@ export class ConfigurationManager implements IConfigurationManager {
    * Saves configuration to VS Code settings
    */
   async saveConfiguration(config: ExtensionConfiguration): Promise<void> {
-    // Validate configuration before saving
-    if (!this.validateConfiguration(config)) {
-      throw new Error('Cannot save invalid configuration');
-    }
+    const errorHandler = ErrorHandler.getInstance();
     
     try {
+      // Enhanced validation before saving
+      const validationResult = await validateConfiguration(config, 'saveConfiguration');
+      
+      if (!validationResult.isValid) {
+        const errorMessage = `Cannot save invalid configuration: ${validationResult.errors.join(', ')}`;
+        await errorHandler.handleError(
+          new ConfigurationError(errorMessage),
+          createErrorContext(undefined, undefined, 'saveConfiguration', { 
+            errors: validationResult.errors,
+            config 
+          })
+        );
+        throw new ConfigurationError(errorMessage);
+      }
+      
+      // Use the validated/fixed configuration for saving
+      const configToSave = validationResult.config;
+      
       const vsCodeConfig = vscode.workspace.getConfiguration(ConfigurationManager.CONFIGURATION_SECTION);
       
       // Save coordinator configuration
       await vsCodeConfig.update(
         ConfigurationManager.COORDINATOR_KEY, 
-        config.coordinator, 
+        configToSave.coordinator, 
         vscode.ConfigurationTarget.Global
       );
       
       // Save custom agents configuration
       await vsCodeConfig.update(
         ConfigurationManager.CUSTOM_AGENTS_KEY, 
-        config.customAgents, 
+        configToSave.customAgents, 
         vscode.ConfigurationTarget.Global
       );
       
+      // Log warnings if any
+      if (validationResult.warnings.length > 0) {
+        console.warn('Configuration saved with warnings:', validationResult.warnings);
+      }
+      
     } catch (error) {
-      console.error('Error saving configuration:', error);
-      throw new Error(`Failed to save configuration: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Error saving configuration:', errorMessage);
+      
+      if (!(error instanceof ConfigurationError)) {
+        await errorHandler.handleError(
+          new ConfigurationError(`Failed to save configuration: ${errorMessage}`),
+          createErrorContext(undefined, undefined, 'saveConfiguration', { config })
+        );
+      }
+      
+      throw error;
     }
   }
 
@@ -137,7 +196,7 @@ export class ConfigurationManager implements IConfigurationManager {
    * Validates a configuration object
    */
   validateConfiguration(config: ExtensionConfiguration): boolean {
-    const validation = ConfigurationValidator.validateExtensionConfiguration(config);
+    const validation = EnhancedConfigurationValidator.validateWithContext(config, 'validateConfiguration');
     if (!validation.isValid) {
       console.error('Configuration validation failed:', validation.errors);
       return false;
@@ -149,7 +208,7 @@ export class ConfigurationManager implements IConfigurationManager {
    * Gets the default configuration
    */
   getDefaultConfiguration(): ExtensionConfiguration {
-    return JSON.parse(JSON.stringify(DEFAULT_EXTENSION_CONFIG));
+    return EnhancedConfigurationValidator.getDefaultConfiguration();
   }
 
   /**
@@ -256,5 +315,47 @@ export class ConfigurationManager implements IConfigurationManager {
   async getAllAgentNames(): Promise<string[]> {
     const config = await this.loadConfiguration();
     return ['coordinator', ...config.customAgents.map(agent => agent.name)];
+  }
+
+  /**
+   * Resets configuration to defaults
+   */
+  async resetToDefaults(): Promise<void> {
+    const defaultConfig = this.getDefaultConfiguration();
+    await this.saveConfiguration(defaultConfig);
+    console.log('Configuration reset to defaults');
+  }
+
+  /**
+   * Validates and fixes current configuration
+   */
+  async validateAndFixConfiguration(): Promise<{ fixed: boolean; errors: string[]; warnings: string[] }> {
+    try {
+      const currentConfig = await this.loadConfiguration();
+      const validationResult = await validateConfiguration(currentConfig, 'validateAndFix');
+      
+      if (!validationResult.isValid || validationResult.warnings.length > 0) {
+        // Save the fixed configuration
+        await this.saveConfiguration(validationResult.config);
+        return {
+          fixed: true,
+          errors: validationResult.errors,
+          warnings: validationResult.warnings
+        };
+      }
+      
+      return {
+        fixed: false,
+        errors: [],
+        warnings: []
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      return {
+        fixed: false,
+        errors: [`Failed to validate and fix configuration: ${errorMessage}`],
+        warnings: []
+      };
+    }
   }
 }
