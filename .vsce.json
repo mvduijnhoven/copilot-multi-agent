@@ -1,0 +1,8 @@
+{
+  "dependencies": true,
+  "yarn": false,
+  "packagedDependencies": [
+    "uuid"
+  ],
+  "ignoreFile": ".vscodeignore"
+}

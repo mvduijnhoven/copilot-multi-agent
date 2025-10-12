@@ -3,6 +3,7 @@
 out/**
 node_modules/**
 src/**
+.git/**
 .gitignore
 .yarnrc
 esbuild.js
@@ -12,3 +13,15 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 **/.vscode-test.*
+.kiro/**
+*.vsix
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+.npm
+.eslintcache
+coverage/
+.nyc_output/
+images/README.md
+images/*.svg
