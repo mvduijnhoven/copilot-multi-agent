@@ -254,6 +254,12 @@ export class DefaultDelegationEngine implements DelegationEngine {
         return false;
       }
 
+      // Get the target agent configuration to ensure it exists
+      const toAgentConfig = await this.getAgentConfiguration(toAgent);
+      if (!toAgentConfig) {
+        return false;
+      }
+
       // Check delegation permissions
       const { delegationPermissions } = fromAgentConfig;
       
