@@ -155,8 +155,19 @@ This guide helps you diagnose and resolve common issues with the Copilot Multi-A
 - Agents cannot access expected tools
 - "Tool not available" errors
 - Limited functionality
+- Coordinator shows "Tools Available 2" instead of configured tools
+
+**Root Cause:**
+The tool filter may not be initialized with actual GitHub Copilot tools, showing only the 2 custom delegation tools (`delegateWork` and `reportOut`).
 
 **Solutions:**
+
+#### Refresh Available Tools
+If you see only 2 tools available (delegation tools), try refreshing the tool discovery:
+
+1. Open Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`)
+2. Run: `Multi-Agent: Refresh Available Tools`
+3. Check the status: `Multi-Agent: Show Extension Status`
 
 #### Check Tool Permissions
 ```json

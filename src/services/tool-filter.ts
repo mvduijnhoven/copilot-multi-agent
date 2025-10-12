@@ -111,6 +111,13 @@ export class DefaultToolFilter implements ToolFilter {
    */
   setAvailableTools(tools: any[]): void {
     this.allAvailableTools = tools || [];
+    console.log(`Tool filter updated with ${this.allAvailableTools.length} GitHub Copilot tools`);
+    
+    // Log available tool names for debugging
+    if (this.allAvailableTools.length > 0) {
+      const toolNames = this.allAvailableTools.map(tool => this.getToolName(tool));
+      console.log('Available GitHub Copilot tools:', toolNames.join(', '));
+    }
   }
 
   /**
@@ -145,7 +152,14 @@ export class DefaultToolFilter implements ToolFilter {
     }
     
     if (tool && typeof tool === 'object') {
-      return tool.name || tool.id || tool.toolName || 'unknown';
+      // Try different possible property names for tool identification
+      return tool.name || 
+             tool.id || 
+             tool.toolName || 
+             tool.displayName ||
+             tool.identifier ||
+             (tool.metadata && tool.metadata.name) ||
+             'unknown';
     }
     
     return 'unknown';

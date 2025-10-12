@@ -179,6 +179,117 @@ export async function deactivate(): Promise<void> {
 }
 
 /**
+ * Discovers and initializes available GitHub Copilot tools
+ */
+async function initializeAvailableTools(
+  toolFilter: DefaultToolFilter,
+  compatibilityMode: boolean
+): Promise<void> {
+  console.log('Discovering available GitHub Copilot tools...');
+
+  try {
+    // Get available language model tools from VS Code
+    const availableTools: any[] = [];
+    
+    if (!compatibilityMode) {
+      try {
+        // Try to access VS Code's language model tools
+        // Note: This API might not be available in all VS Code versions
+        if (vscode.lm && (vscode.lm as any).tools) {
+          // Get all available tools
+          const toolsInfo = (vscode.lm as any).tools;
+          if (Array.isArray(toolsInfo)) {
+            availableTools.push(...toolsInfo);
+            console.log(`Discovered ${toolsInfo.length} GitHub Copilot tools`);
+          } else if (toolsInfo.getAll && typeof toolsInfo.getAll === 'function') {
+            const tools = await toolsInfo.getAll();
+            availableTools.push(...tools);
+            console.log(`Discovered ${tools.length} GitHub Copilot tools`);
+          }
+        } else if ((vscode as any).chat && (vscode as any).chat.tools) {
+          // Fallback: try alternative API path
+          const tools = await (vscode as any).chat.tools.getAll();
+          availableTools.push(...tools);
+          console.log(`Discovered ${tools.length} GitHub Copilot tools via fallback API`);
+        } else {
+          console.warn('GitHub Copilot tools API not available in this VS Code version');
+          
+          // Show user notification about limited functionality
+          vscode.window.showWarningMessage(
+            'GitHub Copilot tools API is not available in this VS Code version. Multi-agent functionality will be limited to delegation tools only.',
+            'Learn More'
+          ).then(selection => {
+            if (selection === 'Learn More') {
+              vscode.env.openExternal(vscode.Uri.parse('https://code.visualstudio.com/docs/copilot/copilot-chat'));
+            }
+          });
+        }
+      } catch (toolDiscoveryError) {
+        console.warn('Failed to discover GitHub Copilot tools:', toolDiscoveryError);
+        
+        // Create mock tools for development/testing if no real tools are available
+        if (process.env.NODE_ENV === 'development') {
+          availableTools.push(...createMockCopilotTools());
+          console.log('Using mock tools for development');
+        }
+      }
+    } else {
+      console.log('Tool discovery skipped in compatibility mode');
+    }
+
+    // Set the discovered tools in the tool filter
+    toolFilter.setAvailableTools(availableTools);
+    
+    console.log(`Tool filter initialized with ${availableTools.length} GitHub Copilot tools + 2 custom delegation tools`);
+
+  } catch (error) {
+    console.error('Error initializing available tools:', error);
+    
+    // Fallback: ensure tool filter has at least the custom tools
+    toolFilter.setAvailableTools([]);
+    console.log('Tool filter initialized with custom delegation tools only due to error');
+  }
+}
+
+/**
+ * Creates mock GitHub Copilot tools for development/testing
+ */
+function createMockCopilotTools(): any[] {
+  const mockTools = [
+    'codeSearch',
+    'fileEdit',
+    'terminalCommand',
+    'gitOperation',
+    'debugger',
+    'testRunner',
+    'linter',
+    'formatter',
+    'refactor',
+    'documentation',
+    'codeGeneration',
+    'codeReview',
+    'projectAnalysis'
+  ];
+
+  return mockTools.map(toolName => ({
+    name: toolName,
+    description: `Mock ${toolName} tool for development`,
+    parametersSchema: {
+      type: 'object',
+      properties: {
+        input: {
+          type: 'string',
+          description: 'Input for the tool'
+        }
+      }
+    },
+    invoke: async () => ({
+      content: `Mock response from ${toolName} tool`
+    })
+  } as any));
+}
+
+/**
  * Initializes the extension and creates all core components
  */
 async function initializeExtension(
@@ -224,6 +335,9 @@ async function initializeExtension(
     
     // Initialize tool filter
     const toolFilter = new DefaultToolFilter(configurationManager);
+    
+    // Discover and initialize available GitHub Copilot tools
+    await initializeAvailableTools(toolFilter, compatibilityMode);
     
     // Initialize agent engine
     const agentEngine = new DefaultAgentEngine(toolFilter);
@@ -515,12 +629,15 @@ function registerCommands(context: vscode.ExtensionContext, state: ExtensionStat
         const conversationStats = state.delegationEngine.getConversationStats();
         const degradationStatus = state.degradationManager.getStatusMessage();
         const disabledFeatures = state.degradationManager.getDisabledFeatures();
+        const allToolNames = state.toolFilter.getAllToolNames();
+        const toolCount = allToolNames.length;
         
         const statusMessage = [
           `Multi-Agent Extension Status:`,
           `• Initialized: ${state.isInitialized ? '✅' : '❌'}`,
           `• Compatibility Mode: ${state.compatibilityMode ? '⚠️ Yes' : '✅ No'}`,
           `• Chat Participant: ${isRegistered ? '✅ Registered' : '❌ Not Registered'}`,
+          `• Available Tools: ${toolCount} (${toolCount > 0 ? allToolNames.slice(0, 5).join(', ') + (toolCount > 5 ? '...' : '') : 'None'})`,
           `• Active Delegations: ${delegationStats.active}`,
           `• Active Conversations: ${conversationStats.active}`,
           disabledFeatures.length > 0 ? `• Disabled Features: ${disabledFeatures.join(', ')}` : '',
@@ -529,6 +646,9 @@ function registerCommands(context: vscode.ExtensionContext, state: ExtensionStat
         ].filter(Boolean).join('\n');
         
         const actions = ['Close'];
+        if (toolCount === 2) { // Only custom delegation tools
+          actions.unshift('Refresh Tools');
+        }
         if (state.compatibilityMode) {
           actions.unshift('View Compatibility Report');
         }
@@ -546,6 +666,8 @@ function registerCommands(context: vscode.ExtensionContext, state: ExtensionStat
           vscode.commands.executeCommand('copilot-multi-agent.showCompatibilityReport');
         } else if (selection === 'Check Compatibility') {
           vscode.commands.executeCommand('copilot-multi-agent.checkCompatibility');
+        } else if (selection === 'Refresh Tools') {
+          vscode.commands.executeCommand('copilot-multi-agent.refreshTools');
         }
       } catch (error) {
         console.error('Error showing status:', error);
@@ -652,6 +774,37 @@ function registerCommands(context: vscode.ExtensionContext, state: ExtensionStat
     }
   );
 
+  // Command: Refresh available tools
+  const refreshToolsCommand = vscode.commands.registerCommand(
+    'copilot-multi-agent.refreshTools',
+    async () => {
+      try {
+        console.log('Refreshing available tools...');
+        
+        // Re-initialize available tools
+        await initializeAvailableTools(state.toolFilter, state.compatibilityMode);
+        
+        // Get updated tool count
+        const allToolNames = state.toolFilter.getAllToolNames();
+        const toolCount = allToolNames.length;
+        
+        const message = [
+          `✅ Tools refreshed successfully!`,
+          `Total available tools: ${toolCount}`,
+          toolCount > 0 ? `Tool names: ${allToolNames.slice(0, 10).join(', ')}${toolCount > 10 ? ` (+${toolCount - 10} more)` : ''}` : 'No tools available'
+        ].join('\n');
+        
+        vscode.window.showInformationMessage(message);
+        
+      } catch (error) {
+        console.error('Error refreshing tools:', error);
+        vscode.window.showErrorMessage(
+          `Failed to refresh tools: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
+      }
+    }
+  );
+
   // Add commands to disposables
   context.subscriptions.push(
     resetConfigCommand,
@@ -660,7 +813,8 @@ function registerCommands(context: vscode.ExtensionContext, state: ExtensionStat
     openSettingsCommand,
     showCompatibilityReportCommand,
     checkCompatibilityCommand,
-    toggleCompatibilityModeCommand
+    toggleCompatibilityModeCommand,
+    refreshToolsCommand
   );
   
   console.log('Extension commands registered successfully');

@@ -38,7 +38,6 @@
     "Chat",
     "Other"
   ],
-
   "galleryBanner": {
     "color": "#1e1e1e",
     "theme": "dark"
@@ -287,7 +286,49 @@
           "maxItems": 20
         }
       }
-    }
+    },
+    "commands": [
+      {
+        "command": "copilot-multi-agent.resetConfiguration",
+        "title": "Reset Configuration to Defaults",
+        "category": "Multi-Agent"
+      },
+      {
+        "command": "copilot-multi-agent.validateConfiguration",
+        "title": "Validate and Fix Configuration",
+        "category": "Multi-Agent"
+      },
+      {
+        "command": "copilot-multi-agent.showStatus",
+        "title": "Show Extension Status",
+        "category": "Multi-Agent"
+      },
+      {
+        "command": "copilot-multi-agent.openSettings",
+        "title": "Open Settings",
+        "category": "Multi-Agent"
+      },
+      {
+        "command": "copilot-multi-agent.showCompatibilityReport",
+        "title": "Show Compatibility Report",
+        "category": "Multi-Agent"
+      },
+      {
+        "command": "copilot-multi-agent.checkCompatibility",
+        "title": "Check Compatibility",
+        "category": "Multi-Agent"
+      },
+      {
+        "command": "copilot-multi-agent.toggleCompatibilityMode",
+        "title": "Toggle Compatibility Mode",
+        "category": "Multi-Agent"
+      },
+      {
+        "command": "copilot-multi-agent.refreshTools",
+        "title": "Refresh Available Tools",
+        "category": "Multi-Agent"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run package",

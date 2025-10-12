@@ -380,6 +380,17 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
     stream.markdown('**Coordinator Capabilities:**\n');
     stream.markdown(`- Available Tools: ${coordinatorContext.availableTools.length}\n`);
     
+    // Show tool names for debugging (limit to first 10 to avoid clutter)
+    if (coordinatorContext.availableTools.length > 0) {
+      const toolNames = coordinatorContext.availableTools
+        .map(tool => tool.name || 'unknown')
+        .slice(0, 10);
+      const displayNames = toolNames.join(', ');
+      const moreCount = coordinatorContext.availableTools.length - toolNames.length;
+      
+      stream.markdown(`- Tool Names: ${displayNames}${moreCount > 0 ? ` (+${moreCount} more)` : ''}\n`);
+    }
+    
     if (delegationTools.length > 0) {
       stream.markdown(`- Delegation Tools: ${delegationTools.map(t => t.name).join(', ')}\n`);
     } else {
