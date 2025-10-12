@@ -65,7 +65,31 @@ suite('DelegateWorkTool Tests', () => {
 
   setup(() => {
     mockDelegationEngine = new MockDelegationEngine();
-    delegateWorkTool = new DelegateWorkTool(mockDelegationEngine, 'coordinator');
+    
+    // Create mock system prompt builder
+    const mockSystemPromptBuilder = {
+      getEnumeratedAgentNames: () => ['test-agent', 'code-reviewer']
+    };
+    
+    // Create mock configuration
+    const mockConfiguration = {
+      coordinator: {
+        name: 'coordinator',
+        systemPrompt: 'Test prompt',
+        description: 'Test description',
+        useFor: 'Testing',
+        delegationPermissions: { type: 'all' },
+        toolPermissions: { type: 'all' }
+      },
+      customAgents: []
+    };
+    
+    delegateWorkTool = new DelegateWorkTool(
+      mockDelegationEngine, 
+      'coordinator',
+      mockSystemPromptBuilder as any,
+      mockConfiguration as any
+    );
     mockToken = new MockCancellationToken();
   });
 

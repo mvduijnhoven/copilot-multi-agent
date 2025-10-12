@@ -101,6 +101,19 @@ This feature extends the GitHub Copilot Chat extension with multi-agent capabili
 
 ### Requirement 9
 
+**User Story:** As a developer, I want agents to receive information about available delegation targets in their system prompt, so that they can make informed decisions about which agents to delegate work to and understand the capabilities of each available agent.
+
+#### Acceptance Criteria
+
+1. WHEN an agent is configured with delegation permissions THEN the system SHALL extend the agent's system prompt with information about available delegation targets
+2. WHEN the system prompt is extended THEN the system SHALL include the name and "useFor" description for each agent the current agent can delegate to
+3. WHEN the delegateWork tool is provided to an agent THEN the system SHALL enumerate the accepted agentName values based on the agent's delegation permissions
+4. WHEN an agent has "all" delegation permissions THEN the system SHALL include information about all other configured agents
+5. WHEN an agent has "specific" delegation permissions THEN the system SHALL only include information about the specifically allowed agents
+6. WHEN an agent has "none" delegation permissions THEN the system SHALL not extend the system prompt with delegation information
+
+### Requirement 10
+
 **User Story:** As a developer, I want the extension to integrate seamlessly with existing VS Code and GitHub Copilot functionality, so that it enhances rather than disrupts my current development workflow.
 
 #### Acceptance Criteria

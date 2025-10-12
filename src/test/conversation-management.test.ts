@@ -23,7 +23,8 @@ class MockAgentEngine implements AgentEngine {
       conversationId: `${config.name}-${Date.now()}`,
       systemPrompt: config.systemPrompt,
       availableTools: [],
-      delegationChain: []
+      delegationChain: [],
+      availableDelegationTargets: []
     };
     this.contexts.set(context.conversationId, context);
     return context;
@@ -150,7 +151,8 @@ export async function runConversationManagementTests(): Promise<void> {
     conversationId: 'coord-123',
     systemPrompt: 'You are a coordinator',
     availableTools: [],
-    delegationChain: []
+    delegationChain: [],
+    availableDelegationTargets: []
   };
   mockAgentEngine.setContext('coord-123', coordinatorContext);
   
@@ -195,7 +197,8 @@ export async function runConversationManagementTests(): Promise<void> {
         conversationId: activeConvs[0].conversationId,
         systemPrompt: 'Test prompt',
         availableTools: [],
-        delegationChain: ['coordinator']
+        delegationChain: ['coordinator'],
+        availableDelegationTargets: [],
       };
       mockAgentEngine.setContext(activeConvs[0].conversationId, context);
       delegationEngine.reportOut('test-agent', 'Work completed');
@@ -248,7 +251,8 @@ export async function runConversationManagementTests(): Promise<void> {
         conversationId: activeConvs[0].conversationId,
         systemPrompt: 'Test prompt',
         availableTools: [],
-        delegationChain: ['coordinator']
+        delegationChain: ['coordinator'],
+        availableDelegationTargets: [],
       };
       mockAgentEngine.setContext(activeConvs[0].conversationId, context);
       delegationEngine.reportOut('test-agent', 'Parent task completed');
@@ -290,7 +294,8 @@ export async function runConversationManagementTests(): Promise<void> {
         conversationId: firstConv.conversationId,
         systemPrompt: 'Test prompt',
         availableTools: [],
-        delegationChain: ['coordinator']
+        delegationChain: ['coordinator'],
+        availableDelegationTargets: []
       };
       mockAgentEngine.setContext(firstConv.conversationId, context);
       delegationEngine.reportOut('test-agent', 'Task 1 completed');
@@ -308,7 +313,8 @@ export async function runConversationManagementTests(): Promise<void> {
         conversationId: remainingConv.conversationId,
         systemPrompt: 'Test prompt',
         availableTools: [],
-        delegationChain: ['coordinator']
+        delegationChain: ['coordinator'],
+        availableDelegationTargets: []
       };
       mockAgentEngine.setContext(remainingConv.conversationId, context);
       delegationEngine.reportOut('test-agent', 'Task 2 completed');
@@ -338,7 +344,8 @@ export async function runConversationManagementTests(): Promise<void> {
         conversationId: activeConvs[0].conversationId,
         systemPrompt: 'Test prompt',
         availableTools: [],
-        delegationChain: ['coordinator']
+        delegationChain: ['coordinator'],
+        availableDelegationTargets: []
       };
       mockAgentEngine.setContext(activeConvs[0].conversationId, context);
       delegationEngine.reportOut('test-agent', 'Cleanup test completed');
@@ -441,7 +448,8 @@ export async function runConversationManagementTests(): Promise<void> {
         conversationId: activeConvs[0].conversationId,
         systemPrompt: 'Test prompt',
         availableTools: [],
-        delegationChain: ['coordinator']
+        delegationChain: ['coordinator'],
+        availableDelegationTargets: []
       };
       mockAgentEngine.setContext(activeConvs[0].conversationId, context);
       delegationEngine.reportOut('test-agent', 'Activity test completed');

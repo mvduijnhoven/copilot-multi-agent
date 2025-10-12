@@ -146,7 +146,31 @@ suite('Comprehensive Tool System Tests', () => {
     mockDelegationEngine = new MockDelegationEngine();
     mockConfigManager = new MockConfigurationManager();
     toolFilter = new DefaultToolFilter(mockConfigManager);
-    delegateWorkTool = new DelegateWorkTool(mockDelegationEngine, 'coordinator');
+    
+    // Create mock system prompt builder
+    const mockSystemPromptBuilder = {
+      getEnumeratedAgentNames: () => ['test-agent', 'code-reviewer']
+    };
+    
+    // Create mock configuration
+    const mockConfiguration = {
+      coordinator: {
+        name: 'coordinator',
+        systemPrompt: 'Test prompt',
+        description: 'Test description',
+        useFor: 'Testing',
+        delegationPermissions: { type: 'all' },
+        toolPermissions: { type: 'all' }
+      },
+      customAgents: []
+    };
+    
+    delegateWorkTool = new DelegateWorkTool(
+      mockDelegationEngine, 
+      'coordinator',
+      mockSystemPromptBuilder as any,
+      mockConfiguration as any
+    );
     reportOutTool = new ReportOutTool(mockDelegationEngine, 'test-agent', 'test-conversation-123');
     mockToken = new MockCancellationToken();
   });

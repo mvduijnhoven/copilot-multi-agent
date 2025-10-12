@@ -39,7 +39,8 @@ class MockAgentEngine implements AgentEngine {
       conversationId: `${config.name}-${Date.now()}`,
       systemPrompt: config.systemPrompt,
       availableTools: [],
-      delegationChain: []
+      delegationChain: [],
+      availableDelegationTargets: [],
     };
     this.contexts.set(config.name, context);
     return context;
@@ -52,7 +53,8 @@ class MockAgentEngine implements AgentEngine {
       parentConversationId: parentContext.conversationId,
       systemPrompt: config.systemPrompt,
       availableTools: [],
-      delegationChain: [...parentContext.delegationChain, parentContext.agentName]
+      delegationChain: [...parentContext.delegationChain, parentContext.agentName],
+      availableDelegationTargets: []
     };
     this.contexts.set(config.name, context);
     return context;
@@ -390,7 +392,8 @@ suite('Comprehensive DelegationEngine Tests', () => {
         conversationId: 'test-123',
         systemPrompt: 'Test',
         availableTools: [],
-        delegationChain: ['coordinator']
+        delegationChain: ['coordinator'],
+        availableDelegationTargets: []
       };
       mockAgentEngine.getActiveAgents = () => [context];
 
@@ -413,7 +416,8 @@ suite('Comprehensive DelegationEngine Tests', () => {
         conversationId: 'test-123',
         systemPrompt: 'Test',
         availableTools: [],
-        delegationChain: []
+        delegationChain: [],
+      availableDelegationTargets: [],
       };
       mockAgentEngine.getActiveAgents = () => [context];
 
@@ -428,7 +432,8 @@ suite('Comprehensive DelegationEngine Tests', () => {
         conversationId: 'test-123',
         systemPrompt: 'Test',
         availableTools: [],
-        delegationChain: []
+        delegationChain: [],
+      availableDelegationTargets: [],
       };
       mockAgentEngine.getActiveAgents = () => [context];
 

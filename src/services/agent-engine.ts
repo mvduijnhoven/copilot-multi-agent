@@ -70,7 +70,8 @@ export class DefaultAgentEngine implements AgentEngine {
         conversationId,
         systemPrompt: config.systemPrompt,
         availableTools,
-        delegationChain: []
+        delegationChain: [],
+        availableDelegationTargets: []
       };
 
       // Store the context
@@ -107,7 +108,8 @@ export class DefaultAgentEngine implements AgentEngine {
         parentConversationId: parentContext.conversationId,
         systemPrompt: config.systemPrompt,
         availableTools,
-        delegationChain: [...parentContext.delegationChain, parentContext.agentName]
+        delegationChain: [...parentContext.delegationChain, parentContext.agentName],
+        availableDelegationTargets: []
       };
 
       // Validate delegation chain to prevent circular delegation

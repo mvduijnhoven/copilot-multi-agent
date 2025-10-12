@@ -115,6 +115,25 @@ interface ToolFilter {
 }
 ```
 
+### System Prompt Builder Interface
+
+```typescript
+interface SystemPromptBuilder {
+  buildSystemPrompt(
+    basePrompt: string,
+    agentName: string,
+    configuration: ExtensionConfiguration
+  ): string;
+  
+  getDelegationTargets(
+    agentName: string,
+    configuration: ExtensionConfiguration
+  ): DelegationTarget[];
+  
+  formatDelegationSection(targets: DelegationTarget[]): string;
+}
+```
+
 ## Data Models
 
 ### Configuration Storage
@@ -162,7 +181,42 @@ interface AgentExecutionContext {
   systemPrompt: string;
   availableTools: vscode.LanguageModelTool[];
   delegationChain: string[];
+  availableDelegationTargets: DelegationTarget[];
 }
+
+interface DelegationTarget {
+  name: string;
+  useFor: string;
+}
+```
+
+### System Prompt Extension
+
+The system automatically extends agent system prompts with delegation information when agents have delegation permissions:
+
+```typescript
+interface SystemPromptBuilder {
+  buildSystemPrompt(
+    basePrompt: string,
+    agentName: string,
+    delegationTargets: DelegationTarget[]
+  ): string;
+}
+```
+
+Example extended system prompt:
+```
+[Original system prompt content]
+
+## Available Agents for Delegation
+
+You can delegate work to the following agents using the delegateWork tool:
+
+- **code-reviewer**: Code review, security analysis, best practices
+- **documentation-writer**: Technical documentation, API docs, user guides
+- **test-engineer**: Unit testing, integration testing, test automation
+
+When using the delegateWork tool, use one of these agent names: code-reviewer, documentation-writer, test-engineer
 ```
 
 ## Error Handling

@@ -23,7 +23,8 @@ class MockAgentEngine implements AgentEngine {
       conversationId: `${config.name}-123`,
       systemPrompt: config.systemPrompt,
       availableTools: [],
-      delegationChain: []
+      delegationChain: [],
+      availableDelegationTargets: []
     };
     this.contexts.set(config.name, context);
     return context;
@@ -219,7 +220,8 @@ export async function runDelegationEngineTests(): Promise<void> {
     conversationId: 'test-123',
     systemPrompt: 'Test prompt',
     availableTools: [],
-    delegationChain: ['coordinator']
+    delegationChain: ['coordinator'],
+    availableDelegationTargets: []
   };
   mockAgentEngine.setMockContext('test-agent', testContext);
   

@@ -42,6 +42,14 @@
     - Write unit tests for tool filtering logic and edge cases
     - _Requirements: 3.4, 4.3, 6.3_
 
+  - [x] 3.3 Implement system prompt extension for delegation awareness
+    - Create SystemPromptBuilder class to extend agent system prompts with delegation information
+    - Implement methods to determine available delegation targets based on agent permissions
+    - Add system prompt formatting to include agent names and "useFor" descriptions
+    - Update delegateWork tool to enumerate accepted agentName values based on delegation permissions
+    - Write unit tests for system prompt building and delegation target resolution
+    - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6_
+
 - [x] 4. Create custom delegation tools
   - [x] 4.1 Implement delegateWork tool
     - Create delegateWork tool class implementing VS Code LanguageModelTool interface
@@ -87,6 +95,13 @@
     - Write integration tests for coordinator agent execution flow
     - _Requirements: 1.3, 1.4, 4.2, 4.4_
 
+  - [ ] 6.4 Update agent execution to use extended system prompts
+    - Integrate SystemPromptBuilder into agent execution context creation
+    - Update agent initialization to use extended system prompts with delegation information
+    - Modify delegateWork tool to provide enumerated agent names based on permissions
+    - Write integration tests for extended system prompt functionality in agent execution
+    - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6_
+
   - [x] 6.3 Add response streaming and error handling
     - Implement response streaming from agents back to chat interface
     - Add comprehensive error handling with graceful degradation
@@ -131,6 +146,13 @@
     - Implement mock objects for VS Code API dependencies
     - Ensure test coverage meets quality standards
     - _Requirements: All requirements for component validation_
+
+  - [ ] 9.3 Add tests for system prompt extension functionality
+    - Create unit tests for SystemPromptBuilder class and delegation target resolution
+    - Add tests for system prompt formatting with different delegation permission types
+    - Implement tests for delegateWork tool agent name enumeration
+    - Write integration tests for extended system prompts in agent execution contexts
+    - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6_
 
   - [x] 9.2 Create integration tests for multi-agent workflows
     - Write tests for end-to-end delegation scenarios

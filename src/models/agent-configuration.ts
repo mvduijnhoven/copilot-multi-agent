@@ -2,6 +2,8 @@
  * Core interfaces for agent configuration and management
  */
 
+import { DelegationTarget } from './system-prompt-builder';
+
 export interface AgentConfiguration {
   name: string;
   systemPrompt: string;
@@ -38,6 +40,7 @@ export interface AgentExecutionContext {
   systemPrompt: string;
   availableTools: any[]; // Will be typed as vscode.LanguageModelTool[] when available
   delegationChain: string[];
+  availableDelegationTargets: DelegationTarget[];
 }
 
 /**

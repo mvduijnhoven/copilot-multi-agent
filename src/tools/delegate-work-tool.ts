@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 import { DelegationEngine } from '../models/delegation-engine';
+import { ISystemPromptBuilder } from '../models/system-prompt-builder';
+import { ExtensionConfiguration } from '../models/agent-configuration';
 
 /**
  * Parameters for the delegateWork tool
@@ -17,37 +19,66 @@ export class DelegateWorkTool implements vscode.LanguageModelTool<DelegateWorkPa
   readonly name = 'delegateWork';
   readonly description = 'Delegate work to a specialized agent. Use this when a task requires expertise from a specific agent or when breaking down complex work into specialized components.';
   
-  readonly parametersSchema = {
-    type: 'object',
-    properties: {
-      agentName: {
-        type: 'string',
-        description: 'The name of the agent to delegate work to. Must be a configured agent name.',
-        minLength: 1,
-        maxLength: 50,
-        pattern: '^[a-zA-Z0-9-_]+$'
-      },
-      workDescription: {
-        type: 'string',
-        description: 'Detailed description of the work to be delegated. Be specific about what needs to be done.',
-        minLength: 10,
-        maxLength: 2000
-      },
-      reportExpectations: {
-        type: 'string',
-        description: 'Description of what kind of report or output is expected from the delegated agent.',
-        minLength: 5,
-        maxLength: 500
-      }
-    },
-    required: ['agentName', 'workDescription', 'reportExpectations'],
-    additionalProperties: false
-  };
+  private _parametersSchema: any;
 
   constructor(
     private delegationEngine: DelegationEngine,
-    private currentAgentName: string
-  ) {}
+    private currentAgentName: string,
+    private systemPromptBuilder: ISystemPromptBuilder,
+    private configuration: ExtensionConfiguration
+  ) {
+    // Build parameters schema with enumerated agent names
+    this._parametersSchema = this.buildParametersSchema();
+  }
+
+  get parametersSchema() {
+    return this._parametersSchema;
+  }
+
+  /**
+   * Builds the parameters schema with enumerated agent names based on delegation permissions
+   */
+  private buildParametersSchema(): any {
+    const enumeratedAgentNames = this.systemPromptBuilder.getEnumeratedAgentNames(
+      this.currentAgentName,
+      this.configuration
+    );
+
+    const agentNameProperty: any = {
+      type: 'string',
+      description: 'The name of the agent to delegate work to. Must be a configured agent name.',
+      minLength: 1,
+      maxLength: 50,
+      pattern: '^[a-zA-Z0-9-_]+$'
+    };
+
+    // Add enum constraint if there are specific allowed agents
+    if (enumeratedAgentNames.length > 0) {
+      agentNameProperty.enum = enumeratedAgentNames;
+      agentNameProperty.description += ` Available agents: ${enumeratedAgentNames.join(', ')}`;
+    }
+
+    return {
+      type: 'object',
+      properties: {
+        agentName: agentNameProperty,
+        workDescription: {
+          type: 'string',
+          description: 'Detailed description of the work to be delegated. Be specific about what needs to be done.',
+          minLength: 10,
+          maxLength: 2000
+        },
+        reportExpectations: {
+          type: 'string',
+          description: 'Description of what kind of report or output is expected from the delegated agent.',
+          minLength: 5,
+          maxLength: 500
+        }
+      },
+      required: ['agentName', 'workDescription', 'reportExpectations'],
+      additionalProperties: false
+    };
+  }
 
   async invoke(
     options: vscode.LanguageModelToolInvocationOptions<DelegateWorkParameters>,

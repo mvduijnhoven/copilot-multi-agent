@@ -10,3 +10,4 @@ export * from './delegation-engine';
 export * from './error-handler';
 export * from './configuration-validator';
 export * from './compatibility-checker';
+export * from './system-prompt-builder';

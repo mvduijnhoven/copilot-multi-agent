@@ -220,7 +220,8 @@ suite('AgentEngine Tests', () => {
         conversationId: '',
         systemPrompt: '',
         availableTools: [],
-        delegationChain: []
+        delegationChain: [],
+        availableDelegationTargets: []
       } as AgentExecutionContext;
 
       try {
