@@ -42,15 +42,15 @@
     - Write unit tests for tool filtering logic and edge cases
     - _Requirements: 3.4, 4.3, 6.3_
 
-- [ ] 4. Create custom delegation tools
-  - [ ] 4.1 Implement delegateWork tool
+- [x] 4. Create custom delegation tools
+  - [x] 4.1 Implement delegateWork tool
     - Create delegateWork tool class implementing VS Code LanguageModelTool interface
     - Add parameter validation for agent name, work description, and report expectations
     - Implement delegation permission checking and validation
     - Write unit tests for delegateWork tool functionality
     - _Requirements: 7.1, 7.2, 8.1, 8.2_
 
-  - [ ] 4.2 Implement reportOut tool
+  - [x] 4.2 Implement reportOut tool
     - Create reportOut tool class implementing VS Code LanguageModelTool interface
     - Add report text capture and agent execution termination logic
     - Implement conversation context management for report forwarding
