@@ -27,15 +27,15 @@
     - Write integration tests for settings UI functionality
     - _Requirements: 5.1, 5.2, 5.3_
 
-- [ ] 3. Implement core agent engine
-  - [ ] 3.1 Create agent execution context management
+- [x] 3. Implement core agent engine
+  - [x] 3.1 Create agent execution context management
     - Implement AgentExecutionContext class with conversation tracking
     - Create agent instance management with proper lifecycle handling
     - Add system prompt application and context isolation
     - Write unit tests for agent context management
     - _Requirements: 1.3, 4.2, 4.3_
 
-  - [ ] 3.2 Implement tool filtering system
+  - [x] 3.2 Implement tool filtering system
     - Create ToolFilter class with permission-based tool access control
     - Implement methods to filter GitHub Copilot tools based on agent permissions
     - Add tool availability calculation for different permission types (all, none, specific)

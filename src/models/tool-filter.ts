@@ -10,7 +10,7 @@ export interface ToolFilter {
    * @param agentName The name of the agent
    * @returns Array of available tools
    */
-  getAvailableTools(agentName: string): any[]; // Will be typed as vscode.LanguageModelTool[] when available
+  getAvailableTools(agentName: string): Promise<any[]>; // Will be typed as vscode.LanguageModelTool[] when available
   
   /**
    * Filters tools based on permissions

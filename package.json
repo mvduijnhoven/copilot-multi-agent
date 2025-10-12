@@ -63,7 +63,11 @@
               "properties": {
                 "type": {
                   "type": "string",
-                  "enum": ["all", "none", "specific"],
+                  "enum": [
+                    "all",
+                    "none",
+                    "specific"
+                  ],
                   "description": "Delegation permission type: 'all' allows delegation to any agent, 'none' disables delegation, 'specific' allows delegation to selected agents only"
                 },
                 "agents": {
@@ -78,7 +82,9 @@
                   "uniqueItems": true
                 }
               },
-              "required": ["type"],
+              "required": [
+                "type"
+              ],
               "additionalProperties": false
             },
             "toolPermissions": {
@@ -86,12 +92,19 @@
               "description": "Controls which tools the coordinator has access to",
               "default": {
                 "type": "specific",
-                "tools": ["delegateWork", "reportOut"]
+                "tools": [
+                  "delegateWork",
+                  "reportOut"
+                ]
               },
               "properties": {
                 "type": {
                   "type": "string",
-                  "enum": ["all", "none", "specific"],
+                  "enum": [
+                    "all",
+                    "none",
+                    "specific"
+                  ],
                   "description": "Tool permission type: 'all' grants access to all tools, 'none' disables all tools, 'specific' grants access to selected tools only"
                 },
                 "tools": {
@@ -105,11 +118,19 @@
                   "uniqueItems": true
                 }
               },
-              "required": ["type"],
+              "required": [
+                "type"
+              ],
               "additionalProperties": false
             }
           },
-          "required": ["systemPrompt", "description", "useFor", "delegationPermissions", "toolPermissions"],
+          "required": [
+            "systemPrompt",
+            "description",
+            "useFor",
+            "delegationPermissions",
+            "toolPermissions"
+          ],
           "additionalProperties": false
         },
         "copilotMultiAgent.customAgents": {
@@ -149,7 +170,11 @@
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": ["all", "none", "specific"],
+                    "enum": [
+                      "all",
+                      "none",
+                      "specific"
+                    ],
                     "description": "Delegation permission type: 'all' allows delegation to any agent, 'none' disables delegation, 'specific' allows delegation to selected agents only"
                   },
                   "agents": {
@@ -164,7 +189,9 @@
                     "uniqueItems": true
                   }
                 },
-                "required": ["type"],
+                "required": [
+                  "type"
+                ],
                 "additionalProperties": false
               },
               "toolPermissions": {
@@ -173,7 +200,11 @@
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": ["all", "none", "specific"],
+                    "enum": [
+                      "all",
+                      "none",
+                      "specific"
+                    ],
                     "description": "Tool permission type: 'all' grants access to all tools, 'none' disables all tools, 'specific' grants access to selected tools only"
                   },
                   "tools": {
@@ -187,11 +218,20 @@
                     "uniqueItems": true
                   }
                 },
-                "required": ["type"],
+                "required": [
+                  "type"
+                ],
                 "additionalProperties": false
               }
             },
-            "required": ["name", "systemPrompt", "description", "useFor", "delegationPermissions", "toolPermissions"],
+            "required": [
+              "name",
+              "systemPrompt",
+              "description",
+              "useFor",
+              "delegationPermissions",
+              "toolPermissions"
+            ],
             "additionalProperties": false
           },
           "default": [],
@@ -214,10 +254,14 @@
     "lint": "eslint src",
     "test": "vscode-test"
   },
+  "dependencies": {
+    "uuid": "^10.0.0"
+  },
   "devDependencies": {
     "@types/vscode": "^1.105.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
+    "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^8.45.0",
     "@typescript-eslint/parser": "^8.45.0",
     "eslint": "^9.36.0",
