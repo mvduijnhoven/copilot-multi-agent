@@ -9,6 +9,7 @@ import { ConfigurationManager } from '../services/configuration-manager';
 import { DefaultAgentEngine } from '../services/agent-engine';
 import { DefaultToolFilter } from '../services/tool-filter';
 import { DefaultDelegationEngine } from '../services/delegation-engine';
+import { SystemPromptBuilder } from '../services/system-prompt-builder';
 import { 
   DEFAULT_COORDINATOR_CONFIG,
   DEFAULT_EXTENSION_CONFIG 
@@ -123,7 +124,8 @@ suite('Coordinator Agent Execution Integration Tests', () => {
     // Initialize with default configuration
     mockConfigManager = new MockConfigurationManager();
     toolFilter = new DefaultToolFilter(mockConfigManager as any);
-    agentEngine = new DefaultAgentEngine(toolFilter);
+    const systemPromptBuilder = new SystemPromptBuilder();
+    agentEngine = new DefaultAgentEngine(toolFilter, systemPromptBuilder);
     delegationEngine = new DefaultDelegationEngine(agentEngine, mockConfigManager as any);
     
     // Create chat participant

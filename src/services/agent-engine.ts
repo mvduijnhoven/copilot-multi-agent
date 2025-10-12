@@ -2,17 +2,19 @@
  * Agent engine service for managing agent execution contexts and lifecycle
  */
 
-import { AgentConfiguration, AgentExecutionContext, AgentExecutionError } from '../models';
+import { AgentConfiguration, AgentExecutionContext, AgentExecutionError, ExtensionConfiguration } from '../models';
 import { ToolFilter } from './tool-filter';
+import { ISystemPromptBuilder } from '../models/system-prompt-builder';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface AgentEngine {
   /**
    * Initializes an agent with its configuration
    * @param config The agent configuration
+   * @param extensionConfig The complete extension configuration for delegation context
    * @returns The agent execution context
    */
-  initializeAgent(config: AgentConfiguration): Promise<AgentExecutionContext>;
+  initializeAgent(config: AgentConfiguration, extensionConfig?: ExtensionConfiguration): Promise<AgentExecutionContext>;
   
   /**
    * Executes an agent with the given context and input
@@ -48,15 +50,17 @@ export interface AgentEngine {
 export class DefaultAgentEngine implements AgentEngine {
   private activeContexts: Map<string, AgentExecutionContext> = new Map();
   private toolFilter: ToolFilter;
+  private systemPromptBuilder: ISystemPromptBuilder;
 
-  constructor(toolFilter: ToolFilter) {
+  constructor(toolFilter: ToolFilter, systemPromptBuilder: ISystemPromptBuilder) {
     this.toolFilter = toolFilter;
+    this.systemPromptBuilder = systemPromptBuilder;
   }
 
   /**
    * Initializes an agent with its configuration
    */
-  async initializeAgent(config: AgentConfiguration): Promise<AgentExecutionContext> {
+  async initializeAgent(config: AgentConfiguration, extensionConfig?: ExtensionConfiguration): Promise<AgentExecutionContext> {
     try {
       // Generate unique conversation ID
       const conversationId = uuidv4();
@@ -64,14 +68,31 @@ export class DefaultAgentEngine implements AgentEngine {
       // Get available tools for this agent
       const availableTools = await this.toolFilter.getAvailableTools(config.name);
       
+      // Build extended system prompt with delegation information if extension config is provided
+      let systemPrompt = config.systemPrompt;
+      let availableDelegationTargets: any[] = [];
+      
+      if (extensionConfig) {
+        systemPrompt = this.systemPromptBuilder.buildSystemPrompt(
+          config.systemPrompt,
+          config.name,
+          extensionConfig
+        );
+        
+        availableDelegationTargets = this.systemPromptBuilder.getDelegationTargets(
+          config.name,
+          extensionConfig
+        );
+      }
+      
       // Create execution context
       const context: AgentExecutionContext = {
         agentName: config.name,
         conversationId,
-        systemPrompt: config.systemPrompt,
+        systemPrompt,
         availableTools,
         delegationChain: [],
-        availableDelegationTargets: []
+        availableDelegationTargets
       };
 
       // Store the context
@@ -92,7 +113,8 @@ export class DefaultAgentEngine implements AgentEngine {
    */
   async initializeChildAgent(
     config: AgentConfiguration, 
-    parentContext: AgentExecutionContext
+    parentContext: AgentExecutionContext,
+    extensionConfig?: ExtensionConfiguration
   ): Promise<AgentExecutionContext> {
     try {
       // Generate unique conversation ID for child
@@ -101,15 +123,32 @@ export class DefaultAgentEngine implements AgentEngine {
       // Get available tools for this agent
       const availableTools = await this.toolFilter.getAvailableTools(config.name);
       
+      // Build extended system prompt with delegation information if extension config is provided
+      let systemPrompt = config.systemPrompt;
+      let availableDelegationTargets: any[] = [];
+      
+      if (extensionConfig) {
+        systemPrompt = this.systemPromptBuilder.buildSystemPrompt(
+          config.systemPrompt,
+          config.name,
+          extensionConfig
+        );
+        
+        availableDelegationTargets = this.systemPromptBuilder.getDelegationTargets(
+          config.name,
+          extensionConfig
+        );
+      }
+      
       // Create child execution context with delegation chain
       const context: AgentExecutionContext = {
         agentName: config.name,
         conversationId,
         parentConversationId: parentContext.conversationId,
-        systemPrompt: config.systemPrompt,
+        systemPrompt,
         availableTools,
         delegationChain: [...parentContext.delegationChain, parentContext.agentName],
-        availableDelegationTargets: []
+        availableDelegationTargets
       };
 
       // Validate delegation chain to prevent circular delegation

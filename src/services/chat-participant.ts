@@ -240,8 +240,11 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
       // Ensure we have a valid coordinator configuration
       const config = coordinatorConfig || DEFAULT_COORDINATOR_CONFIG;
       
-      // Initialize the coordinator agent
-      const context = await this.agentEngine.initializeAgent(config);
+      // Load the complete extension configuration for delegation context
+      const extensionConfig = await this.configurationManager.loadConfiguration();
+      
+      // Initialize the coordinator agent with extended system prompt
+      const context = await this.agentEngine.initializeAgent(config, extensionConfig);
       
       return context;
     } catch (error) {

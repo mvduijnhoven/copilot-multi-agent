@@ -8,7 +8,8 @@ import {
   DelegationReport,
   AgentConfiguration,
   CoordinatorConfiguration,
-  AgentExecutionContext
+  AgentExecutionContext,
+  ExtensionConfiguration
 } from '../models';
 import { AgentEngine } from './agent-engine';
 import { IConfigurationManager } from './configuration-manager';
@@ -140,10 +141,14 @@ export class DefaultDelegationEngine implements DelegationEngine {
         parentContext.conversationId
       );
 
+      // Get the complete extension configuration for delegation context
+      const extensionConfig = await this.configurationManager.loadConfiguration();
+      
       // Initialize the target agent as a child agent
       const childContext = await this.initializeChildAgent(
         toAgentConfig as AgentConfiguration,
-        parentContext
+        parentContext,
+        extensionConfig
       );
 
       // Update the child context with the managed conversation ID
@@ -492,15 +497,16 @@ export class DefaultDelegationEngine implements DelegationEngine {
    */
   private async initializeChildAgent(
     config: AgentConfiguration,
-    parentContext: AgentExecutionContext
+    parentContext: AgentExecutionContext,
+    extensionConfig?: ExtensionConfiguration
   ): Promise<AgentExecutionContext> {
     // Use the agent engine's method if it exists, otherwise implement basic logic
     if ('initializeChildAgent' in this.agentEngine) {
-      return (this.agentEngine as any).initializeChildAgent(config, parentContext);
+      return (this.agentEngine as any).initializeChildAgent(config, parentContext, extensionConfig);
     }
     
     // Fallback implementation
-    const childContext = await this.agentEngine.initializeAgent(config);
+    const childContext = await this.agentEngine.initializeAgent(config, extensionConfig);
     childContext.parentConversationId = parentContext.conversationId;
     childContext.delegationChain = [...parentContext.delegationChain, parentContext.agentName];
     

@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 import { ConfigurationManager } from '../services/configuration-manager';
 import { DefaultToolFilter } from '../services/tool-filter';
 import { DefaultAgentEngine } from '../services/agent-engine';
+import { SystemPromptBuilder } from '../services/system-prompt-builder';
 
 suite('Tool Integration Tests', () => {
   let configManager: ConfigurationManager;
@@ -16,7 +17,8 @@ suite('Tool Integration Tests', () => {
   setup(() => {
     configManager = new ConfigurationManager();
     toolFilter = new DefaultToolFilter(configManager);
-    agentEngine = new DefaultAgentEngine(toolFilter);
+    const systemPromptBuilder = new SystemPromptBuilder();
+    agentEngine = new DefaultAgentEngine(toolFilter, systemPromptBuilder);
   });
 
   teardown(() => {

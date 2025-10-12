@@ -13,7 +13,8 @@ import {
   MultiAgentChatParticipant,
   DefaultToolFilter,
   DefaultDelegationEngine,
-  ErrorHandler
+  ErrorHandler,
+  SystemPromptBuilder
 } from './services';
 import { 
   CompatibilityChecker,
@@ -339,8 +340,11 @@ async function initializeExtension(
     // Discover and initialize available GitHub Copilot tools
     await initializeAvailableTools(toolFilter, compatibilityMode);
     
+    // Initialize system prompt builder
+    const systemPromptBuilder = new SystemPromptBuilder();
+    
     // Initialize agent engine
-    const agentEngine = new DefaultAgentEngine(toolFilter);
+    const agentEngine = new DefaultAgentEngine(toolFilter, systemPromptBuilder);
     
     // Initialize delegation engine
     const delegationEngine = new DefaultDelegationEngine(agentEngine, configurationManager);

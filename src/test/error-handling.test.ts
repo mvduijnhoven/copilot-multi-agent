@@ -9,6 +9,7 @@ import { ConfigurationManager } from '../services/configuration-manager';
 import { DefaultAgentEngine } from '../services/agent-engine';
 import { DefaultToolFilter } from '../services/tool-filter';
 import { DefaultDelegationEngine } from '../services/delegation-engine';
+import { SystemPromptBuilder } from '../services/system-prompt-builder';
 import { 
   MultiAgentError,
   MultiAgentErrorType,
@@ -147,7 +148,8 @@ suite('Error Handling and Recovery Integration Tests', () => {
     // Initialize with error-simulating configuration manager
     errorConfigManager = new ErrorSimulatingConfigManager();
     toolFilter = new DefaultToolFilter(errorConfigManager as any);
-    agentEngine = new DefaultAgentEngine(toolFilter);
+    const systemPromptBuilder = new SystemPromptBuilder();
+    agentEngine = new DefaultAgentEngine(toolFilter, systemPromptBuilder);
     delegationEngine = new DefaultDelegationEngine(agentEngine, errorConfigManager as any);
     
     // Create chat participant

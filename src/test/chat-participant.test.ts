@@ -9,6 +9,7 @@ import { ConfigurationManager } from '../services/configuration-manager';
 import { DefaultAgentEngine } from '../services/agent-engine';
 import { DefaultToolFilter } from '../services/tool-filter';
 import { DefaultDelegationEngine } from '../services/delegation-engine';
+import { SystemPromptBuilder } from '../services/system-prompt-builder';
 import { 
   DEFAULT_COORDINATOR_CONFIG,
   CHAT_PARTICIPANT_ID,
@@ -91,7 +92,8 @@ suite('MultiAgentChatParticipant Integration Tests', () => {
     // Initialize dependencies
     configManager = new ConfigurationManager();
     toolFilter = new DefaultToolFilter(configManager);
-    agentEngine = new DefaultAgentEngine(toolFilter);
+    const systemPromptBuilder = new SystemPromptBuilder();
+    agentEngine = new DefaultAgentEngine(toolFilter, systemPromptBuilder);
     delegationEngine = new DefaultDelegationEngine(agentEngine, configManager);
     
     // Create chat participant

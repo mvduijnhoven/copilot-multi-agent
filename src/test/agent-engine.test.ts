@@ -6,6 +6,7 @@ import * as assert from 'assert';
 import { DefaultAgentEngine } from '../services/agent-engine';
 import { DefaultToolFilter } from '../services/tool-filter';
 import { IConfigurationManager } from '../services/configuration-manager';
+import { SystemPromptBuilder } from '../services/system-prompt-builder';
 import { 
   AgentConfiguration, 
   AgentExecutionContext, 
@@ -103,7 +104,8 @@ suite('AgentEngine Tests', () => {
   setup(() => {
     configManager = new MockConfigurationManager();
     toolFilter = new DefaultToolFilter(configManager);
-    agentEngine = new DefaultAgentEngine(toolFilter);
+    const systemPromptBuilder = new SystemPromptBuilder();
+    agentEngine = new DefaultAgentEngine(toolFilter, systemPromptBuilder);
   });
 
   suite('Agent Initialization', () => {

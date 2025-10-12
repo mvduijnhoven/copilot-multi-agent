@@ -95,7 +95,7 @@
     - Write integration tests for coordinator agent execution flow
     - _Requirements: 1.3, 1.4, 4.2, 4.4_
 
-  - [ ] 6.4 Update agent execution to use extended system prompts
+  - [x] 6.4 Update agent execution to use extended system prompts
     - Integrate SystemPromptBuilder into agent execution context creation
     - Update agent initialization to use extended system prompts with delegation information
     - Modify delegateWork tool to provide enumerated agent names based on permissions
