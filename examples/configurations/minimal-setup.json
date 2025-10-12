@@ -1,0 +1,15 @@
+{
+  "copilotMultiAgent.coordinator": {
+    "systemPrompt": "You are a coordinator agent responsible for orchestrating tasks and delegating work to specialized agents. Analyze the user's request and determine if it can be handled directly or if it should be delegated to a more specialized agent.",
+    "description": "Coordinates work between specialized agents",
+    "useFor": "Task orchestration and delegation",
+    "delegationPermissions": {
+      "type": "all"
+    },
+    "toolPermissions": {
+      "type": "specific",
+      "tools": ["delegateWork", "reportOut"]
+    }
+  },
+  "copilotMultiAgent.customAgents": []
+}

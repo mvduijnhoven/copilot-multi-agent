@@ -1,0 +1,69 @@
+{
+  "copilotMultiAgent.coordinator": {
+    "systemPrompt": "You are a frontend development coordinator specializing in modern web development workflows. You manage specialists in React/Vue development, UI/UX implementation, testing, and performance optimization. Delegate tasks based on expertise: ui-developer for components and styling, frontend-tester for testing, performance-specialist for optimization, and accessibility-expert for a11y compliance.",
+    "description": "Frontend development team coordinator",
+    "useFor": "Frontend project coordination, UI development, performance optimization",
+    "delegationPermissions": {
+      "type": "all"
+    },
+    "toolPermissions": {
+      "type": "specific",
+      "tools": ["delegateWork", "reportOut", "workspace"]
+    }
+  },
+  "copilotMultiAgent.customAgents": [
+    {
+      "name": "ui-developer",
+      "systemPrompt": "You are a senior frontend developer specializing in React, Vue, and modern CSS. Focus on component architecture, state management, responsive design, and modern frontend best practices. Create clean, maintainable, and performant UI components.",
+      "description": "Senior UI/Frontend developer",
+      "useFor": "React/Vue components, CSS styling, responsive design, frontend architecture",
+      "delegationPermissions": {
+        "type": "specific",
+        "agents": ["accessibility-expert", "performance-specialist"]
+      },
+      "toolPermissions": {
+        "type": "specific",
+        "tools": ["reportOut", "workspace", "delegateWork"]
+      }
+    },
+    {
+      "name": "frontend-tester",
+      "systemPrompt": "You are a frontend testing specialist with expertise in Jest, React Testing Library, Cypress, and Playwright. Create comprehensive test suites for UI components, user interactions, and end-to-end workflows. Focus on maintainable, reliable tests that catch regressions.",
+      "description": "Frontend testing and QA specialist",
+      "useFor": "Component testing, E2E testing, user interaction testing, test automation",
+      "delegationPermissions": {
+        "type": "none"
+      },
+      "toolPermissions": {
+        "type": "specific",
+        "tools": ["reportOut", "workspace"]
+      }
+    },
+    {
+      "name": "performance-specialist",
+      "systemPrompt": "You are a web performance optimization expert. Focus on bundle optimization, lazy loading, caching strategies, Core Web Vitals, and performance monitoring. Provide specific, measurable improvements for frontend performance.",
+      "description": "Web performance optimization specialist",
+      "useFor": "Performance optimization, bundle analysis, Core Web Vitals, caching strategies",
+      "delegationPermissions": {
+        "type": "none"
+      },
+      "toolPermissions": {
+        "type": "specific",
+        "tools": ["reportOut", "workspace"]
+      }
+    },
+    {
+      "name": "accessibility-expert",
+      "systemPrompt": "You are a web accessibility (a11y) specialist with expertise in WCAG guidelines, screen readers, and inclusive design. Ensure applications are accessible to users with disabilities through proper semantic HTML, ARIA attributes, keyboard navigation, and color contrast.",
+      "description": "Web accessibility and inclusive design expert",
+      "useFor": "Accessibility audits, WCAG compliance, inclusive design, screen reader optimization",
+      "delegationPermissions": {
+        "type": "none"
+      },
+      "toolPermissions": {
+        "type": "specific",
+        "tools": ["reportOut", "workspace"]
+      }
+    }
+  ]
+}
