@@ -99,15 +99,17 @@ suite('Tool Discovery Tests', () => {
   test('getAvailableTools returns filtered tools for coordinator', async () => {
     // This test requires a valid configuration, so we'll mock it
     const mockConfig = {
-      coordinator: {
-        name: 'coordinator' as const,
-        systemPrompt: 'Test prompt',
-        description: 'Test coordinator',
-        useFor: 'Testing',
-        delegationPermissions: { type: 'all' as const },
-        toolPermissions: { type: 'all' as const }
-      },
-      customAgents: []
+      entryAgent: 'coordinator',
+      agents: [
+        {
+          name: 'coordinator' as const,
+          systemPrompt: 'Test prompt',
+          description: 'Test coordinator',
+          useFor: 'Testing',
+          delegationPermissions: { type: 'all' as const },
+          toolPermissions: { type: 'all' as const }
+        }
+      ]
     };
 
     // Mock the configuration manager

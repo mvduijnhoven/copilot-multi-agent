@@ -4,23 +4,24 @@
  */
 
 import * as assert from 'assert';
-import { 
+import {
   ConfigurationValidator,
-  ExtensionConfiguration, 
-  AgentConfiguration, 
+  ExtensionConfiguration,
+  AgentConfiguration,
   DEFAULT_EXTENSION_CONFIG,
   DEFAULT_COORDINATOR_CONFIG,
   ToolPermissions,
   DelegationPermissions
-} from '../models/agent-configuration';
+} from '../models';
 
 suite('Comprehensive Core Component Tests', () => {
 
   suite('Configuration Validation Logic', () => {
     test('should validate complete valid configuration', () => {
       const validConfig: ExtensionConfiguration = {
-        coordinator: DEFAULT_COORDINATOR_CONFIG,
-        customAgents: [
+        entryAgent: 'coordinator',
+        agents: [
+          DEFAULT_COORDINATOR_CONFIG,
           {
             name: 'test-agent',
             systemPrompt: 'You are a test agent',
@@ -53,8 +54,9 @@ suite('Comprehensive Core Component Tests', () => {
 
     test('should reject configuration with duplicate agent names', () => {
       const invalidConfig: ExtensionConfiguration = {
-        coordinator: DEFAULT_COORDINATOR_CONFIG,
-        customAgents: [
+        entryAgent: 'coordinator',
+        agents: [
+          DEFAULT_COORDINATOR_CONFIG,
           {
             name: 'duplicate',
             systemPrompt: 'First agent',
@@ -81,11 +83,12 @@ suite('Comprehensive Core Component Tests', () => {
 
     test('should validate complex delegation permissions', () => {
       const complexConfig: ExtensionConfiguration = {
-        coordinator: {
-          ...DEFAULT_COORDINATOR_CONFIG,
-          delegationPermissions: { type: 'specific', agents: ['agent1', 'agent2'] }
-        },
-        customAgents: [
+        entryAgent: 'coordinator',
+        agents: [
+          {
+            ...DEFAULT_COORDINATOR_CONFIG,
+            delegationPermissions: { type: 'specific', agents: ['agent1', 'agent2'] }
+          },
           {
             name: 'agent1',
             systemPrompt: 'Agent 1',
@@ -112,11 +115,13 @@ suite('Comprehensive Core Component Tests', () => {
 
     test('should reject invalid delegation references', () => {
       const invalidConfig: ExtensionConfiguration = {
-        coordinator: {
-          ...DEFAULT_COORDINATOR_CONFIG,
-          delegationPermissions: { type: 'specific', agents: ['non-existent-agent'] }
-        },
-        customAgents: []
+        entryAgent: 'coordinator',
+        agents: [
+          {
+            ...DEFAULT_COORDINATOR_CONFIG,
+            delegationPermissions: { type: 'specific', agents: ['non-existent-agent'] }
+          }
+        ]
       };
 
       const validation = ConfigurationValidator.validateExtensionConfiguration(invalidConfig);
@@ -134,15 +139,17 @@ suite('Comprehensive Core Component Tests', () => {
 
       testCases.forEach(({ permissions, shouldBeValid }, index) => {
         const config: ExtensionConfiguration = {
-          coordinator: {
-            ...DEFAULT_COORDINATOR_CONFIG,
-            toolPermissions: permissions
-          },
-          customAgents: []
+          entryAgent: 'coordinator',
+          agents: [
+            {
+              ...DEFAULT_COORDINATOR_CONFIG,
+              toolPermissions: permissions
+            }
+          ]
         };
 
         const validation = ConfigurationValidator.validateExtensionConfiguration(config);
-        assert.strictEqual(validation.isValid, shouldBeValid, 
+        assert.strictEqual(validation.isValid, shouldBeValid,
           `Test case ${index}: ${JSON.stringify(permissions)} should be ${shouldBeValid ? 'valid' : 'invalid'}`);
       });
     });
@@ -156,15 +163,17 @@ suite('Comprehensive Core Component Tests', () => {
 
       testCases.forEach(({ permissions, shouldBeValid }, index) => {
         const config: ExtensionConfiguration = {
-          coordinator: {
-            ...DEFAULT_COORDINATOR_CONFIG,
-            delegationPermissions: permissions
-          },
-          customAgents: []
+          entryAgent: 'coordinator',
+          agents: [
+            {
+              ...DEFAULT_COORDINATOR_CONFIG,
+              delegationPermissions: permissions
+            }
+          ]
         };
 
         const validation = ConfigurationValidator.validateExtensionConfiguration(config);
-        assert.strictEqual(validation.isValid, shouldBeValid, 
+        assert.strictEqual(validation.isValid, shouldBeValid,
           `Test case ${index}: ${JSON.stringify(permissions)} should be ${shouldBeValid ? 'valid' : 'invalid'}`);
       });
     });
@@ -173,11 +182,13 @@ suite('Comprehensive Core Component Tests', () => {
   suite('Agent Configuration Edge Cases', () => {
     test('should handle empty system prompts', () => {
       const config: ExtensionConfiguration = {
-        coordinator: {
-          ...DEFAULT_COORDINATOR_CONFIG,
-          systemPrompt: ''
-        },
-        customAgents: []
+        entryAgent: 'coordinator',
+        agents: [
+          {
+            ...DEFAULT_COORDINATOR_CONFIG,
+            systemPrompt: ''
+          }
+        ]
       };
 
       const validation = ConfigurationValidator.validateExtensionConfiguration(config);
@@ -188,11 +199,13 @@ suite('Comprehensive Core Component Tests', () => {
     test('should handle very long system prompts', () => {
       const longPrompt = 'A'.repeat(10000);
       const config: ExtensionConfiguration = {
-        coordinator: {
-          ...DEFAULT_COORDINATOR_CONFIG,
-          systemPrompt: longPrompt
-        },
-        customAgents: []
+        entryAgent: 'coordinator',
+        agents: [
+          {
+            ...DEFAULT_COORDINATOR_CONFIG,
+            systemPrompt: longPrompt
+          }
+        ]
       };
 
       const validation = ConfigurationValidator.validateExtensionConfiguration(config);
@@ -206,8 +219,10 @@ suite('Comprehensive Core Component Tests', () => {
 
       invalidNames.forEach(invalidName => {
         const config: ExtensionConfiguration = {
-          coordinator: DEFAULT_COORDINATOR_CONFIG,
-          customAgents: [{
+          entryAgent: 'coordinator',
+          agents: [{
+            ...DEFAULT_COORDINATOR_CONFIG
+          }, {
             name: invalidName,
             systemPrompt: 'Valid prompt',
             description: 'Valid description',
@@ -218,7 +233,7 @@ suite('Comprehensive Core Component Tests', () => {
         };
 
         const validation = ConfigurationValidator.validateExtensionConfiguration(config);
-        assert.strictEqual(validation.isValid, false, 
+        assert.strictEqual(validation.isValid, false,
           `Agent name "${invalidName}" should be invalid`);
       });
     });
@@ -228,8 +243,10 @@ suite('Comprehensive Core Component Tests', () => {
 
       validNames.forEach(validName => {
         const config: ExtensionConfiguration = {
-          coordinator: DEFAULT_COORDINATOR_CONFIG,
-          customAgents: [{
+          entryAgent: 'coordinator',
+          agents: [{
+            ...DEFAULT_COORDINATOR_CONFIG
+            }, {
             name: validName,
             systemPrompt: 'Valid prompt',
             description: 'Valid description',
@@ -240,17 +257,18 @@ suite('Comprehensive Core Component Tests', () => {
         };
 
         const validation = ConfigurationValidator.validateExtensionConfiguration(config);
-        assert.strictEqual(validation.isValid, true, 
+        assert.strictEqual(validation.isValid, true,
           `Agent name "${validName}" should be valid`);
       });
     });
 
     test('should handle maximum number of custom agents', () => {
       const maxAgents = 19; // Stay under any potential limit
-      const customAgents: AgentConfiguration[] = [];
+      const agents: AgentConfiguration[] = [];
 
+      agents.push(DEFAULT_COORDINATOR_CONFIG);
       for (let i = 0; i < maxAgents; i++) {
-        customAgents.push({
+        agents.push({
           name: `agent${i}`,
           systemPrompt: `Agent ${i} prompt`,
           description: `Agent ${i} description`,
@@ -261,8 +279,8 @@ suite('Comprehensive Core Component Tests', () => {
       }
 
       const config: ExtensionConfiguration = {
-        coordinator: DEFAULT_COORDINATOR_CONFIG,
-        customAgents
+        entryAgent: 'coordinator',
+        agents
       };
 
       const validation = ConfigurationValidator.validateExtensionConfiguration(config);
@@ -303,20 +321,20 @@ suite('Comprehensive Core Component Tests', () => {
       testCases.forEach((testCase, index) => {
         const validation = ConfigurationValidator.validateExtensionConfiguration(testCase as any);
         // Should either be valid (with defaults applied) or invalid with clear errors
-        assert.ok(typeof validation.isValid === 'boolean', 
+        assert.ok(typeof validation.isValid === 'boolean',
           `Test case ${index} should return a boolean validation result`);
-        assert.ok(Array.isArray(validation.errors), 
+        assert.ok(Array.isArray(validation.errors),
           `Test case ${index} should return an array of errors`);
       });
     });
 
     test('should preserve valid configuration unchanged', () => {
       const originalConfig: ExtensionConfiguration = {
-        coordinator: {
-          ...DEFAULT_COORDINATOR_CONFIG,
-          systemPrompt: 'Custom coordinator prompt'
-        },
-        customAgents: [{
+        entryAgent: 'coordinator',
+        agents: [{
+            ...DEFAULT_COORDINATOR_CONFIG,
+            systemPrompt: 'Custom coordinator prompt'
+          }, {
           name: 'test-agent',
           systemPrompt: 'Custom agent prompt',
           description: 'Custom description',
@@ -328,7 +346,7 @@ suite('Comprehensive Core Component Tests', () => {
 
       const validation = ConfigurationValidator.validateExtensionConfiguration(originalConfig);
       assert.strictEqual(validation.isValid, true);
-      
+
       // Validation should succeed for valid configuration
       assert.strictEqual(validation.isValid, true);
     });
@@ -342,15 +360,15 @@ suite('Comprehensive Core Component Tests', () => {
           expectedErrorKeywords: ['coordinator', 'required']
         },
         {
-          config: { 
-            coordinator: { ...DEFAULT_COORDINATOR_CONFIG, name: 'wrong' }, 
-            customAgents: [] 
+          config: {
+            coordinator: { ...DEFAULT_COORDINATOR_CONFIG, name: 'wrong' },
+            customAgents: []
           },
           expectedErrorKeywords: ['coordinator', 'name']
         },
         {
-          config: { 
-            coordinator: DEFAULT_COORDINATOR_CONFIG, 
+          config: {
+            coordinator: DEFAULT_COORDINATOR_CONFIG,
             customAgents: [
               { name: '', systemPrompt: '', description: '', useFor: '', delegationPermissions: { type: 'none' }, toolPermissions: { type: 'all' } }
             ]
@@ -362,7 +380,7 @@ suite('Comprehensive Core Component Tests', () => {
       testCases.forEach(({ config, expectedErrorKeywords }, index) => {
         const validation = ConfigurationValidator.validateExtensionConfiguration(config as any);
         assert.strictEqual(validation.isValid, false, `Test case ${index} should be invalid`);
-        
+
         expectedErrorKeywords.forEach(keyword => {
           assert.ok(
             validation.errors.some(error => error.toLowerCase().includes(keyword.toLowerCase())),
@@ -383,9 +401,9 @@ suite('Comprehensive Core Component Tests', () => {
 
       const validation = ConfigurationValidator.validateExtensionConfiguration(invalidConfig as any);
       assert.strictEqual(validation.isValid, false);
-      
+
       // Should provide helpful error message
-      assert.ok(validation.errors.some(error => 
+      assert.ok(validation.errors.some(error =>
         error.includes('agents array') || error.includes('must include')
       ));
     });
@@ -394,13 +412,13 @@ suite('Comprehensive Core Component Tests', () => {
   suite('Performance and Scalability', () => {
     test('should validate large configurations efficiently', () => {
       const largeConfig: ExtensionConfiguration = {
-        coordinator: DEFAULT_COORDINATOR_CONFIG,
-        customAgents: []
+        entryAgent: 'coordinator',
+        agents: [DEFAULT_COORDINATOR_CONFIG]
       };
 
       // Create many agents
       for (let i = 0; i < 15; i++) { // Reasonable number for testing
-        largeConfig.customAgents.push({
+        largeConfig.agents.push({
           name: `agent${i}`,
           systemPrompt: `Agent ${i} with a reasonably long system prompt that describes its capabilities and behavior in detail`,
           description: `Agent ${i} description`,
@@ -420,11 +438,15 @@ suite('Comprehensive Core Component Tests', () => {
 
     test('should handle deeply nested delegation chains', () => {
       const chainLength = 10;
-      const customAgents: AgentConfiguration[] = [];
+      const agents: AgentConfiguration[] = [];
 
+      agents.push({
+            ...DEFAULT_COORDINATOR_CONFIG,
+            delegationPermissions: { type: 'specific', agents: ['agent0'] }
+          });
       for (let i = 0; i < chainLength; i++) {
         const nextAgent = i < chainLength - 1 ? `agent${i + 1}` : undefined;
-        customAgents.push({
+        agents.push({
           name: `agent${i}`,
           systemPrompt: `Agent ${i} in delegation chain`,
           description: `Agent ${i}`,
@@ -435,11 +457,8 @@ suite('Comprehensive Core Component Tests', () => {
       }
 
       const config: ExtensionConfiguration = {
-        coordinator: {
-          ...DEFAULT_COORDINATOR_CONFIG,
-          delegationPermissions: { type: 'specific', agents: ['agent0'] }
-        },
-        customAgents
+        entryAgent: 'coordinator',
+        agents
       };
 
       const validation = ConfigurationValidator.validateExtensionConfiguration(config);

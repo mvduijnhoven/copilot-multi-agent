@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Copilot Multi-Agent extension enhances GitHub Copilot Chat with sophisticated multi-agent capabilities through VS Code's Chat Participant API. The system implements a coordinator-agent pattern where a central coordinator agent orchestrates work delegation to specialized custom agents, each with configurable capabilities, tool access, and delegation permissions.
+The Copilot Multi-Agent extension enhances GitHub Copilot Chat with sophisticated multi-agent capabilities through VS Code's Chat Participant API. The system implements a flexible multi-agent pattern where users configure multiple agents with one designated as the "entry agent" that handles initial chat conversations. All agents can delegate work to other agents based on their configured delegation permissions.
 
 The extension provides a comprehensive configuration interface for managing agent settings and implements custom tools (`delegateWork` and `reportOut`) to enable seamless inter-agent communication and task coordination.
 
@@ -14,33 +14,39 @@ The extension provides a comprehensive configuration interface for managing agen
 graph TB
     User[User] --> ChatUI[VS Code Chat UI]
     ChatUI --> ChatParticipant[Multi-Agent Chat Participant]
-    ChatParticipant --> Coordinator[Coordinator Agent]
+    ChatParticipant --> EntryAgent[Entry Agent]
     
-    Coordinator --> ToolFilter[Tool Filter]
+    EntryAgent --> ToolFilter[Tool Filter]
     ToolFilter --> CopilotTools[GitHub Copilot Tools]
     ToolFilter --> CustomTools[Custom Delegation Tools]
     
-    Coordinator --> DelegationEngine[Delegation Engine]
-    DelegationEngine --> AgentA[Custom Agent A]
-    DelegationEngine --> AgentB[Custom Agent B]
-    DelegationEngine --> AgentN[Custom Agent N]
+    EntryAgent --> DelegationEngine[Delegation Engine]
+    DelegationEngine --> AgentA[Agent A]
+    DelegationEngine --> AgentB[Agent B]
+    DelegationEngine --> AgentN[Agent N]
     
     ConfigManager[Configuration Manager] --> AgentConfig[Agent Configurations]
+    ConfigManager --> EntryAgentConfig[Entry Agent Setting]
     ConfigManager --> SettingsUI[VS Code Settings UI]
     
     AgentA --> ToolFilter
     AgentB --> ToolFilter
     AgentN --> ToolFilter
+    
+    AgentA --> DelegationEngine
+    AgentB --> DelegationEngine
+    AgentN --> DelegationEngine
 ```
 
 ### Core Components
 
 1. **Chat Participant**: Main entry point that registers with VS Code's Chat API
 2. **Configuration Manager**: Handles agent configuration persistence and validation
-3. **Agent Engine**: Manages individual agent instances and their execution contexts
-4. **Delegation Engine**: Orchestrates work delegation between agents
-5. **Tool Filter**: Controls tool access based on agent permissions
-6. **Custom Tools**: Implements `delegateWork` and `reportOut` functionality
+3. **Entry Agent Manager**: Manages entry agent selection and fallback logic
+4. **Agent Engine**: Manages individual agent instances and their execution contexts
+5. **Delegation Engine**: Orchestrates work delegation between agents
+6. **Tool Filter**: Controls tool access based on agent permissions
+7. **Custom Tools**: Implements `delegateWork` and `reportOut` functionality
 
 ## Components and Interfaces
 
@@ -71,8 +77,9 @@ interface AgentConfiguration {
   toolPermissions: ToolPermissions;
 }
 
-interface CoordinatorConfiguration extends Omit<AgentConfiguration, 'name'> {
-  name: 'coordinator';
+interface ExtensionConfiguration {
+  entryAgent: string;
+  agents: AgentConfiguration[];
 }
 
 type DelegationPermissions = 
@@ -134,6 +141,16 @@ interface SystemPromptBuilder {
 }
 ```
 
+### Entry Agent Management Interface
+
+```typescript
+interface EntryAgentManager {
+  getEntryAgent(configuration: ExtensionConfiguration): AgentConfiguration;
+  validateEntryAgent(entryAgentName: string, agents: AgentConfiguration[]): boolean;
+  getDefaultEntryAgent(agents: AgentConfiguration[]): AgentConfiguration | null;
+}
+```
+
 ## Data Models
 
 ### Configuration Storage
@@ -142,8 +159,8 @@ The extension uses VS Code's configuration API to store agent settings:
 
 ```typescript
 interface ExtensionConfiguration {
-  coordinator: CoordinatorConfiguration;
-  customAgents: AgentConfiguration[];
+  entryAgent: string;
+  agents: AgentConfiguration[];
 }
 ```
 
@@ -151,14 +168,16 @@ Configuration is stored in VS Code settings under the `copilotMultiAgent` namesp
 
 ```json
 {
-  "copilotMultiAgent.coordinator": {
-    "systemPrompt": "You are a coordinator agent...",
-    "description": "Coordinates work between specialized agents",
-    "useFor": "Task orchestration and delegation",
-    "delegationPermissions": { "type": "all" },
-    "toolPermissions": { "type": "specific", "tools": ["delegateWork", "reportOut"] }
-  },
-  "copilotMultiAgent.customAgents": [
+  "copilotMultiAgent.entryAgent": "coordinator",
+  "copilotMultiAgent.agents": [
+    {
+      "name": "coordinator",
+      "systemPrompt": "You are a coordinator agent...",
+      "description": "Coordinates work between specialized agents",
+      "useFor": "Task orchestration and delegation",
+      "delegationPermissions": { "type": "all" },
+      "toolPermissions": { "type": "specific", "tools": ["delegateWork", "reportOut"] }
+    },
     {
       "name": "code-reviewer",
       "systemPrompt": "You are a code review specialist...",
@@ -242,17 +261,19 @@ interface MultiAgentError extends Error {
 ### Error Handling Strategy
 
 1. **Configuration Errors**: Validate configurations on load, use defaults for invalid settings, show user warnings
-2. **Delegation Errors**: Prevent invalid delegations, provide clear error messages, maintain conversation flow
-3. **Tool Access Errors**: Filter tools silently, log access attempts, provide fallback responses
-4. **Agent Execution Errors**: Isolate agent failures, provide error context to coordinator, continue with available agents
-5. **Circular Delegation**: Detect delegation loops, prevent infinite recursion, provide clear error messages
+2. **Entry Agent Errors**: If configured entry agent is not found, fall back to first available agent and warn user
+3. **Delegation Errors**: Prevent invalid delegations, provide clear error messages, maintain conversation flow
+4. **Tool Access Errors**: Filter tools silently, log access attempts, provide fallback responses
+5. **Agent Execution Errors**: Isolate agent failures, provide error context to delegating agent, continue with available agents
+6. **Circular Delegation**: Detect delegation loops, prevent infinite recursion, provide clear error messages
 
 ### Graceful Degradation
 
-- If coordinator fails: Provide direct Copilot Chat fallback
-- If custom agent fails: Return error to coordinator, continue operation
+- If entry agent fails: Provide direct Copilot Chat fallback
+- If any agent fails: Return error to delegating agent, continue operation
 - If delegation tools fail: Disable delegation, operate in single-agent mode
 - If configuration is invalid: Use default settings, warn user
+- If entry agent not found: Fall back to first available agent, warn user
 
 ## Testing Strategy
 

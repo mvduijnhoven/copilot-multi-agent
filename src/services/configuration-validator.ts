@@ -5,14 +5,12 @@
 
 import { 
   ExtensionConfiguration,
-  CoordinatorConfiguration,
   AgentConfiguration,
   DelegationPermissions,
   ToolPermissions,
   ValidationResult,
   ConfigurationValidator as BaseValidator,
-  DEFAULT_EXTENSION_CONFIG,
-  DEFAULT_COORDINATOR_CONFIG
+  DEFAULT_EXTENSION_CONFIG
 } from '../models/agent-configuration';
 import { ConfigurationError } from '../models/errors';
 import { ErrorHandler, createErrorContext } from './error-handler';
@@ -30,8 +28,7 @@ export interface MigrationResult {
 }
 
 export interface ConfigurationDefaults {
-  coordinator: CoordinatorConfiguration;
-  customAgents: AgentConfiguration[];
+  agents: AgentConfiguration[];
   toolPermissions: ToolPermissions;
   delegationPermissions: DelegationPermissions;
 }
@@ -79,21 +76,22 @@ export class EnhancedConfigurationValidator {
         }
       }
 
-      // Validate coordinator
-      const coordinatorValidation = this.validateCoordinatorWithContext(
-        config.coordinator,
-        `${context}.coordinator`,
+      // Validate agents array
+      const agentsValidation = this.validateAgentsWithContext(
+        config.agents,
+        `${context}.agents`,
         finalOptions
       );
-      errors.push(...coordinatorValidation.errors);
+      errors.push(...agentsValidation.errors);
 
-      // Validate custom agents
-      const customAgentsValidation = this.validateCustomAgentsWithContext(
-        config.customAgents,
-        `${context}.customAgents`,
+      // Validate entry agent setting
+      const entryAgentValidation = this.validateEntryAgentWithContext(
+        config.entryAgent,
+        config.agents,
+        `${context}.entryAgent`,
         finalOptions
       );
-      errors.push(...customAgentsValidation.errors);
+      errors.push(...entryAgentValidation.errors);
 
       // Cross-validation (agent references, circular dependencies, etc.)
       const crossValidation = this.validateCrossReferences(
@@ -119,96 +117,87 @@ export class EnhancedConfigurationValidator {
   }
 
   /**
-   * Validates coordinator configuration with enhanced context
+   * Validates entry agent setting with enhanced context
    */
-  private static validateCoordinatorWithContext(
-    coordinator: any,
+  private static validateEntryAgentWithContext(
+    entryAgent: any,
+    agents: any[],
     context: string,
     options: ValidationOptions
   ): ValidationResult {
     const errors: string[] = [];
 
-    if (!coordinator) {
-      if (options.allowDefaults) {
-        console.log(`${context}: Using default coordinator configuration`);
+    if (!entryAgent) {
+      if (options.allowDefaults && agents && agents.length > 0) {
+        console.log(`${context}: Using first agent as default entry agent`);
         return { isValid: true, errors: [] };
       } else {
-        errors.push(`${context}: Coordinator configuration is required`);
+        errors.push(`${context}: Entry agent setting is required`);
         return { isValid: false, errors };
       }
     }
 
-    // Validate coordinator name
-    if (coordinator.name !== 'coordinator') {
-      errors.push(`${context}.name: Must be "coordinator", got "${coordinator.name}"`);
+    if (typeof entryAgent !== 'string') {
+      errors.push(`${context}: Must be a string, got ${typeof entryAgent}`);
+      return { isValid: false, errors };
     }
 
-    // Validate required fields with specific error messages
-    const fieldValidations = [
-      {
-        field: 'systemPrompt',
-        validator: (value: any) => this.validateSystemPrompt(value, `${context}.systemPrompt`)
-      },
-      {
-        field: 'description',
-        validator: (value: any) => this.validateDescription(value, `${context}.description`)
-      },
-      {
-        field: 'useFor',
-        validator: (value: any) => this.validateUseFor(value, `${context}.useFor`)
-      },
-      {
-        field: 'delegationPermissions',
-        validator: (value: any) => this.validateDelegationPermissionsWithContext(value, `${context}.delegationPermissions`, options.allowDefaults)
-      },
-      {
-        field: 'toolPermissions',
-        validator: (value: any) => this.validateToolPermissionsWithContext(value, `${context}.toolPermissions`, options.allowDefaults)
-      }
-    ];
+    const trimmedEntryAgent = entryAgent.trim();
+    if (trimmedEntryAgent.length === 0) {
+      errors.push(`${context}: Cannot be empty or whitespace only`);
+      return { isValid: false, errors };
+    }
 
-    fieldValidations.forEach(({ field, validator }) => {
-      const validation = validator(coordinator[field]);
-      errors.push(...validation.errors);
-    });
+    // Validate that entry agent exists in agents array
+    if (agents && Array.isArray(agents)) {
+      const agentExists = agents.some((agent: any) => agent?.name === trimmedEntryAgent);
+      if (!agentExists) {
+        errors.push(`${context}: Entry agent "${trimmedEntryAgent}" does not exist in the agents configuration`);
+      }
+    }
 
     return { isValid: errors.length === 0, errors };
   }
 
   /**
-   * Validates custom agents with enhanced context
+   * Validates agents array with enhanced context
    */
-  private static validateCustomAgentsWithContext(
-    customAgents: any,
+  private static validateAgentsWithContext(
+    agents: any,
     context: string,
     options: ValidationOptions
   ): ValidationResult {
     const errors: string[] = [];
 
-    if (!customAgents) {
+    if (!agents) {
       if (options.allowDefaults) {
-        console.log(`${context}: Using empty custom agents array`);
+        console.log(`${context}: Using default agents configuration`);
         return { isValid: true, errors: [] };
       } else {
-        errors.push(`${context}: Custom agents configuration is required`);
+        errors.push(`${context}: Agents configuration is required`);
         return { isValid: false, errors };
       }
     }
 
-    if (!Array.isArray(customAgents)) {
-      errors.push(`${context}: Must be an array, got ${typeof customAgents}`);
+    if (!Array.isArray(agents)) {
+      errors.push(`${context}: Must be an array, got ${typeof agents}`);
+      return { isValid: false, errors };
+    }
+
+    if (agents.length === 0) {
+      errors.push(`${context}: At least one agent must be configured`);
       return { isValid: false, errors };
     }
 
     // Validate agent count limits
-    if (customAgents.length > this.MAX_AGENTS) {
-      errors.push(`${context}: Too many agents (${customAgents.length}), maximum is ${this.MAX_AGENTS}`);
+    if (agents.length > this.MAX_AGENTS) {
+      errors.push(`${context}: Too many agents (${agents.length}), maximum is ${this.MAX_AGENTS}`);
     }
 
     // Track agent names for duplicate detection
-    const agentNames = new Set<string>(['coordinator']);
+    const agentNames = new Set<string>();
 
-    customAgents.forEach((agent: any, index: number) => {
+    agents.forEach((agent: any, index: number) => {
       const agentContext = `${context}[${index}]`;
 
       // Validate agent structure
@@ -309,9 +298,7 @@ export class EnhancedConfigurationValidator {
       errors.push(`${context}: Can only contain letters, numbers, hyphens, and underscores. Got "${trimmedName}"`);
     }
 
-    if (trimmedName === 'coordinator' && context.includes('customAgents')) {
-      errors.push(`${context}: Cannot use reserved name "coordinator" for custom agents`);
-    }
+
 
     return { isValid: errors.length === 0, errors };
   }
@@ -538,33 +525,23 @@ export class EnhancedConfigurationValidator {
 
     try {
       // Collect all agent names
-      const allAgentNames = new Set<string>(['coordinator']);
-      if (config.customAgents && Array.isArray(config.customAgents)) {
-        config.customAgents.forEach((agent: any) => {
+      const allAgentNames = new Set<string>();
+      if (config.agents && Array.isArray(config.agents)) {
+        config.agents.forEach((agent: any) => {
           if (agent?.name) {
             allAgentNames.add(agent.name);
           }
         });
       }
 
-      // Validate coordinator delegation references
-      if (config.coordinator?.delegationPermissions?.type === 'specific') {
-        const coordinatorAgents = config.coordinator.delegationPermissions.agents || [];
-        coordinatorAgents.forEach((agentName: string, index: number) => {
-          if (!allAgentNames.has(agentName)) {
-            errors.push(`${context}.coordinator.delegationPermissions.agents[${index}]: References non-existent agent "${agentName}"`);
-          }
-        });
-      }
-
-      // Validate custom agent delegation references
-      if (config.customAgents && Array.isArray(config.customAgents)) {
-        config.customAgents.forEach((agent: any, agentIndex: number) => {
+      // Validate agent delegation references
+      if (config.agents && Array.isArray(config.agents)) {
+        config.agents.forEach((agent: any, agentIndex: number) => {
           if (agent?.delegationPermissions?.type === 'specific') {
             const agentDelegations = agent.delegationPermissions.agents || [];
             agentDelegations.forEach((targetAgent: string, delegationIndex: number) => {
               if (!allAgentNames.has(targetAgent)) {
-                errors.push(`${context}.customAgents[${agentIndex}].delegationPermissions.agents[${delegationIndex}]: References non-existent agent "${targetAgent}"`);
+                errors.push(`${context}.agents[${agentIndex}].delegationPermissions.agents[${delegationIndex}]: References non-existent agent "${targetAgent}"`);
               }
             });
           }
@@ -595,19 +572,15 @@ export class EnhancedConfigurationValidator {
     const errors: string[] = [];
 
     // Check total agent count
-    const totalAgents = 1 + (config.customAgents?.length || 0); // coordinator + custom agents
+    const totalAgents = config.agents?.length || 0;
     if (totalAgents > this.MAX_AGENTS) {
       errors.push(`${context}: Too many total agents (${totalAgents}), maximum is ${this.MAX_AGENTS}`);
     }
 
     // Check for excessive delegation complexity
     let totalDelegationTargets = 0;
-    if (config.coordinator?.delegationPermissions?.type === 'specific') {
-      totalDelegationTargets += config.coordinator.delegationPermissions.agents?.length || 0;
-    }
-
-    if (config.customAgents && Array.isArray(config.customAgents)) {
-      config.customAgents.forEach((agent: any) => {
+    if (config.agents && Array.isArray(config.agents)) {
+      config.agents.forEach((agent: any) => {
         if (agent?.delegationPermissions?.type === 'specific') {
           totalDelegationTargets += agent.delegationPermissions.agents?.length || 0;
         }
@@ -632,23 +605,15 @@ export class EnhancedConfigurationValidator {
     const buildDelegationGraph = (): Map<string, string[]> => {
       const graph = new Map<string, string[]>();
 
-      // Add coordinator delegations
-      if (config.coordinator?.delegationPermissions?.type === 'specific') {
-        graph.set('coordinator', config.coordinator.delegationPermissions.agents || []);
-      } else if (config.coordinator?.delegationPermissions?.type === 'all') {
-        const allAgents = config.customAgents?.map((agent: any) => agent.name).filter(Boolean) || [];
-        graph.set('coordinator', allAgents);
-      }
-
-      // Add custom agent delegations
-      if (config.customAgents && Array.isArray(config.customAgents)) {
-        config.customAgents.forEach((agent: any) => {
+      // Add agent delegations
+      if (config.agents && Array.isArray(config.agents)) {
+        config.agents.forEach((agent: any) => {
           if (agent?.name) {
             if (agent.delegationPermissions?.type === 'specific') {
               graph.set(agent.name, agent.delegationPermissions.agents || []);
             } else if (agent.delegationPermissions?.type === 'all') {
-              const allAgents = ['coordinator', ...config.customAgents.map((a: any) => a.name).filter((n: string) => n !== agent.name)];
-              graph.set(agent.name, allAgents);
+              const allOtherAgents = config.agents.map((a: any) => a.name).filter((n: string) => n !== agent.name && Boolean(n));
+              graph.set(agent.name, allOtherAgents);
             }
           }
         });
@@ -713,17 +678,46 @@ export class EnhancedConfigurationValidator {
       migrated = true;
     }
 
-    // Migrate coordinator if missing
-    if (!migratedConfig.coordinator) {
-      migratedConfig.coordinator = DEFAULT_COORDINATOR_CONFIG;
-      changes.push('Added default coordinator configuration');
+    // Migrate from old coordinator/customAgents structure to new agents structure
+    if (migratedConfig.coordinator || migratedConfig.customAgents) {
+      const agents: any[] = [];
+      
+      // Add coordinator as first agent if it exists
+      if (migratedConfig.coordinator) {
+        agents.push(migratedConfig.coordinator);
+      }
+      
+      // Add custom agents
+      if (Array.isArray(migratedConfig.customAgents)) {
+        agents.push(...migratedConfig.customAgents);
+      }
+      
+      migratedConfig.agents = agents;
+      
+      // Set entry agent if not already set
+      if (!migratedConfig.entryAgent && agents.length > 0) {
+        migratedConfig.entryAgent = agents[0].name;
+      }
+      
+      // Remove old structure
+      delete migratedConfig.coordinator;
+      delete migratedConfig.customAgents;
+      
+      changes.push('Migrated from coordinator/customAgents structure to unified agents structure');
       migrated = true;
     }
 
-    // Ensure customAgents is an array
-    if (!Array.isArray(migratedConfig.customAgents)) {
-      migratedConfig.customAgents = [];
-      changes.push('Initialized custom agents array');
+    // Ensure agents is an array
+    if (!Array.isArray(migratedConfig.agents)) {
+      migratedConfig.agents = DEFAULT_EXTENSION_CONFIG.agents;
+      changes.push('Initialized agents array with default configuration');
+      migrated = true;
+    }
+
+    // Ensure entryAgent is set
+    if (!migratedConfig.entryAgent && migratedConfig.agents.length > 0) {
+      migratedConfig.entryAgent = migratedConfig.agents[0].name;
+      changes.push('Set entry agent to first configured agent');
       migrated = true;
     }
 
@@ -745,23 +739,13 @@ export class EnhancedConfigurationValidator {
       return permissions;
     };
 
-    // Migrate coordinator permissions
-    if (migratedConfig.coordinator) {
-      migratedConfig.coordinator.delegationPermissions = migratePermissions(
-        migratedConfig.coordinator.delegationPermissions,
-        'delegation'
-      );
-      migratedConfig.coordinator.toolPermissions = migratePermissions(
-        migratedConfig.coordinator.toolPermissions,
-        'tool'
-      );
+    // Migrate agent permissions
+    if (migratedConfig.agents && Array.isArray(migratedConfig.agents)) {
+      migratedConfig.agents.forEach((agent: any, index: number) => {
+        agent.delegationPermissions = migratePermissions(agent.delegationPermissions, 'delegation');
+        agent.toolPermissions = migratePermissions(agent.toolPermissions, 'tool');
+      });
     }
-
-    // Migrate custom agent permissions
-    migratedConfig.customAgents.forEach((agent: any, index: number) => {
-      agent.delegationPermissions = migratePermissions(agent.delegationPermissions, 'delegation');
-      agent.toolPermissions = migratePermissions(agent.toolPermissions, 'tool');
-    });
 
     return {
       migrated,
@@ -784,8 +768,8 @@ export class EnhancedConfigurationValidator {
     const defaultConfig = this.getDefaultConfiguration();
 
     return {
-      coordinator: partialConfig.coordinator || defaultConfig.coordinator,
-      customAgents: partialConfig.customAgents || defaultConfig.customAgents
+      entryAgent: partialConfig.entryAgent || defaultConfig.entryAgent,
+      agents: partialConfig.agents || defaultConfig.agents
     };
   }
 

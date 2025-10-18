@@ -2,41 +2,43 @@
 
 ## Introduction
 
-This feature extends the GitHub Copilot Chat extension with multi-agent capabilities through a VS Code extension. The extension will provide a chat participant API integration that allows users to configure a coordinator agent and multiple custom agents, each with their own specialized roles and configurations. This enables more sophisticated AI-assisted development workflows where different agents can handle specific tasks or domains.
+This feature extends the GitHub Copilot Chat extension with multi-agent capabilities through a VS Code extension. The extension will provide a chat participant API integration that allows users to configure multiple agents, with one designated as the "entry" agent that handles initial conversations. This enables more sophisticated AI-assisted development workflows where different agents can handle specific tasks or domains, with flexible entry point configuration.
 
 ## Requirements
 
 ### Requirement 1
 
-**User Story:** As a developer, I want to configure a coordinator agent with comprehensive settings, so that I can define how the multi-agent system orchestrates tasks and delegates work to specialized agents.
+**User Story:** As a developer, I want to configure multiple agents and designate one as the entry agent, so that I can define how the multi-agent system handles initial conversations and orchestrates tasks between specialized agents.
 
 #### Acceptance Criteria
 
-1. WHEN the user opens the extension settings THEN the system SHALL display configuration fields for the coordinator agent with a fixed name "coordinator"
-2. WHEN the user configures the coordinator agent THEN the system SHALL provide fields for system prompt, description, "use for" description, delegation permissions, and tool permissions
-3. WHEN the coordinator agent is invoked THEN the system SHALL use the configured system prompt and allowed tools to guide its behavior
-4. WHEN the coordinator needs to delegate work THEN the system SHALL only allow delegation to agents specified in its delegation configuration
-5. IF no system prompt is configured THEN the system SHALL use a default coordinator prompt that handles basic task delegation
+1. WHEN the user opens the extension settings THEN the system SHALL display configuration fields for multiple agents
+2. WHEN the user configures agents THEN the system SHALL provide fields for name, system prompt, description, "use for" description, delegation permissions, and tool permissions for each agent
+3. WHEN the user configures the system THEN the system SHALL provide a setting to designate one agent by name as the "entry agent" that handles initial chat conversations
+4. WHEN the entry agent is invoked THEN the system SHALL use the configured system prompt and allowed tools to guide its behavior
+5. WHEN any agent needs to delegate work THEN the system SHALL only allow delegation to agents specified in its delegation configuration
+6. IF no entry agent is configured THEN the system SHALL use the first configured agent as the default entry agent
 
 ### Requirement 2
 
-**User Story:** As a developer, I want to create and configure multiple custom agents, so that I can have specialized AI assistants for different development tasks like code review, testing, documentation, etc.
+**User Story:** As a developer, I want to create and configure multiple agents, so that I can have specialized AI assistants for different development tasks like code review, testing, documentation, etc.
 
 #### Acceptance Criteria
 
-1. WHEN the user accesses agent configuration THEN the system SHALL provide an interface to add, edit, and remove custom agents
-2. WHEN the user creates a new custom agent THEN the system SHALL require a unique name and allow configuration of agent-specific settings
+1. WHEN the user accesses agent configuration THEN the system SHALL provide an interface to add, edit, and remove agents
+2. WHEN the user creates a new agent THEN the system SHALL require a unique name and allow configuration of agent-specific settings
 3. WHEN the user saves agent configurations THEN the system SHALL persist all agent settings across VS Code sessions
 4. WHEN the user deletes an agent THEN the system SHALL remove it from the configuration and confirm the action
+5. WHEN the user deletes the currently configured entry agent THEN the system SHALL prompt to select a new entry agent from remaining agents
 
 ### Requirement 3
 
-**User Story:** As a developer, I want each custom agent to have comprehensive configurable properties, so that I can tailor each agent for specific development tasks with precise control over their capabilities and delegation permissions.
+**User Story:** As a developer, I want each agent to have comprehensive configurable properties, so that I can tailor each agent for specific development tasks with precise control over their capabilities and delegation permissions.
 
 #### Acceptance Criteria
 
-1. WHEN configuring a custom agent THEN the system SHALL provide fields for unique name, system prompt, description, "use for" description, delegation permissions, and tool permissions
-2. WHEN the user sets an agent name THEN the system SHALL validate uniqueness and prevent duplicate names including "coordinator"
+1. WHEN configuring an agent THEN the system SHALL provide fields for unique name, system prompt, description, "use for" description, delegation permissions, and tool permissions
+2. WHEN the user sets an agent name THEN the system SHALL validate uniqueness and prevent duplicate names
 3. WHEN the user configures delegation permissions THEN the system SHALL provide options for "all", "none", or a specific set of agents selectable from a list
 4. WHEN the user configures tool permissions THEN the system SHALL provide options for "all", "none", or a specific list of tools available in GitHub Copilot Chat
 5. WHEN agent configurations are saved THEN the system SHALL validate all required fields are completed and delegation/tool selections are valid
@@ -48,9 +50,9 @@ This feature extends the GitHub Copilot Chat extension with multi-agent capabili
 #### Acceptance Criteria
 
 1. WHEN the extension is activated THEN the system SHALL register a chat participant with GitHub Copilot Chat
-2. WHEN the user invokes the chat participant THEN the system SHALL route the request through the coordinator agent with its configured system prompt and allowed tools
-3. WHEN the coordinator agent is invoked THEN the system SHALL filter available tools based on the coordinator's tool permissions configuration
-4. WHEN the coordinator determines task delegation is needed THEN the system SHALL provide access to the "delegateWork" and "reportOut" tools if delegation is allowed
+2. WHEN the user invokes the chat participant THEN the system SHALL route the request through the configured entry agent with its configured system prompt and allowed tools
+3. WHEN the entry agent is invoked THEN the system SHALL filter available tools based on the entry agent's tool permissions configuration
+4. WHEN the entry agent determines task delegation is needed THEN the system SHALL provide access to the "delegateWork" and "reportOut" tools if delegation is allowed
 5. WHEN agents complete their tasks THEN the system SHALL return consolidated responses through the chat interface
 
 ### Requirement 5
@@ -71,9 +73,10 @@ This feature extends the GitHub Copilot Chat extension with multi-agent capabili
 #### Acceptance Criteria
 
 1. WHEN an individual agent fails THEN the system SHALL log the error and continue operation with remaining agents
-2. WHEN the coordinator agent encounters an error THEN the system SHALL provide a fallback response and notify the user
+2. WHEN the entry agent encounters an error THEN the system SHALL provide a fallback response and notify the user
 3. WHEN configuration is invalid THEN the system SHALL use default settings and warn the user about the issues
 4. WHEN network or API errors occur THEN the system SHALL provide informative error messages to the user
+5. WHEN the configured entry agent is not found THEN the system SHALL fall back to the first available agent and warn the user
 
 ### Requirement 7
 
@@ -113,6 +116,18 @@ This feature extends the GitHub Copilot Chat extension with multi-agent capabili
 6. WHEN an agent has "none" delegation permissions THEN the system SHALL not extend the system prompt with delegation information
 
 ### Requirement 10
+
+**User Story:** As a developer, I want to configure which agent serves as the entry point for chat conversations, so that I can control which agent handles initial user interactions and customize the primary interface behavior.
+
+#### Acceptance Criteria
+
+1. WHEN the user configures the system THEN the system SHALL provide a setting to specify the entry agent by name
+2. WHEN the entry agent setting is changed THEN the system SHALL validate that the specified agent exists in the configuration
+3. WHEN the chat participant is invoked THEN the system SHALL route initial requests to the configured entry agent
+4. WHEN no entry agent is specified THEN the system SHALL use the first configured agent as the default entry agent
+5. WHEN the specified entry agent is not found THEN the system SHALL fall back to the first available agent and log a warning
+
+### Requirement 11
 
 **User Story:** As a developer, I want the extension to integrate seamlessly with existing VS Code and GitHub Copilot functionality, so that it enhances rather than disrupts my current development workflow.
 

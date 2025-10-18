@@ -12,7 +12,8 @@ import { DelegationEngine } from '../models/delegation-engine';
 import { IConfigurationManager } from '../services/configuration-manager';
 import {
   ExtensionConfiguration,
-  DEFAULT_EXTENSION_CONFIG
+  DEFAULT_EXTENSION_CONFIG,
+  DEFAULT_COORDINATOR_AGENT
 } from '../models';
 
 // Mock implementations
@@ -106,6 +107,11 @@ class MockConfigurationManager implements IConfigurationManager {
 
   getDefaultConfiguration(): ExtensionConfiguration {
     return DEFAULT_EXTENSION_CONFIG;
+  }
+
+  async getEntryAgent() {
+    const entryAgentName = this.config.entryAgent;
+    return this.config.agents.find(agent => agent.name === entryAgentName) || this.config.agents[0] || null;
   }
 
   onConfigurationChanged(): void { }
@@ -343,18 +349,21 @@ suite('Comprehensive Tool System Tests', () => {
     test('should correctly filter tools based on permissions', async () => {
       // Set up configuration with specific tool permissions
       const config: ExtensionConfiguration = {
-        coordinator: {
-          ...DEFAULT_EXTENSION_CONFIG.coordinator,
-          toolPermissions: { type: 'all' }
-        },
-        customAgents: [{
-          name: 'test-agent',
-          systemPrompt: 'Test agent',
-          description: 'Test agent',
-          useFor: 'Testing',
-          delegationPermissions: { type: 'none' },
-          toolPermissions: { type: 'specific', tools: ['reportOut'] }
-        }]
+        entryAgent: 'coordinator',
+        agents: [
+          {
+            ...DEFAULT_COORDINATOR_AGENT,
+            toolPermissions: { type: 'all' }
+          },
+          {
+            name: 'test-agent',
+            systemPrompt: 'Test agent',
+            description: 'Test agent',
+            useFor: 'Testing',
+            delegationPermissions: { type: 'none' },
+            toolPermissions: { type: 'specific', tools: ['reportOut'] }
+          }
+        ]
       };
 
       mockConfigManager.setMockConfig(config);
@@ -376,15 +385,18 @@ suite('Comprehensive Tool System Tests', () => {
 
     test('should handle agents with no tool permissions', async () => {
       const config: ExtensionConfiguration = {
-        coordinator: DEFAULT_EXTENSION_CONFIG.coordinator,
-        customAgents: [{
-          name: 'restricted-agent',
-          systemPrompt: 'Restricted agent',
-          description: 'Restricted agent',
-          useFor: 'Restricted tasks',
-          delegationPermissions: { type: 'none' },
-          toolPermissions: { type: 'none' }
-        }]
+        entryAgent: 'coordinator',
+        agents: [
+          DEFAULT_COORDINATOR_AGENT,
+          {
+            name: 'restricted-agent',
+            systemPrompt: 'Restricted agent',
+            description: 'Restricted agent',
+            useFor: 'Restricted tasks',
+            delegationPermissions: { type: 'none' },
+            toolPermissions: { type: 'none' }
+          }
+        ]
       };
 
       mockConfigManager.setMockConfig(config);

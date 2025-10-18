@@ -53,20 +53,15 @@ export class DefaultToolFilter implements ToolFilter {
     try {
       const config = await this.configManager.loadConfiguration();
       
-      let toolPermissions: ToolPermissions;
-      
-      if (agentName === 'coordinator') {
-        toolPermissions = config.coordinator.toolPermissions;
-      } else {
-        const agentConfig = config.customAgents.find((agent: any) => agent.name === agentName);
-        if (!agentConfig) {
-          throw new ToolAccessError(
-            `Agent "${agentName}" not found in configuration`,
-            agentName
-          );
-        }
-        toolPermissions = agentConfig.toolPermissions;
+      const agentConfig = config.agents.find((agent: any) => agent.name === agentName);
+      if (!agentConfig) {
+        throw new ToolAccessError(
+          `Agent "${agentName}" not found in configuration`,
+          agentName
+        );
       }
+      
+      const toolPermissions = agentConfig.toolPermissions;
 
       return this.filterTools(this.getAllTools(), toolPermissions);
     } catch (error) {
@@ -228,12 +223,8 @@ export class DefaultToolFilter implements ToolFilter {
     try {
       const config = await this.configManager.loadConfiguration();
       
-      if (agentName === 'coordinator') {
-        return config.coordinator.toolPermissions;
-      } else {
-        const agentConfig = config.customAgents.find((agent: any) => agent.name === agentName);
-        return agentConfig ? agentConfig.toolPermissions : null;
-      }
+      const agentConfig = config.agents.find((agent: any) => agent.name === agentName);
+      return agentConfig ? agentConfig.toolPermissions : null;
     } catch (error) {
       return null;
     }

@@ -86,8 +86,8 @@ describe('Extension Activation and Lifecycle', () => {
     sandbox.stub(vscode.window, 'showWarningMessage').resolves();
 
     // Set up default configuration responses
-    mockWorkspaceConfig.get.withArgs('coordinator').returns(DEFAULT_EXTENSION_CONFIG.coordinator);
-    mockWorkspaceConfig.get.withArgs('customAgents').returns(DEFAULT_EXTENSION_CONFIG.customAgents);
+    mockWorkspaceConfig.get.withArgs('entryAgent').returns(DEFAULT_EXTENSION_CONFIG.entryAgent);
+    mockWorkspaceConfig.get.withArgs('agents').returns(DEFAULT_EXTENSION_CONFIG.agents);
     mockWorkspaceConfig.get.withArgs('showActivationMessage', false).returns(false);
   });
 

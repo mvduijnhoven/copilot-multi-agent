@@ -7,7 +7,6 @@ import {
   DelegationRequest, 
   DelegationReport,
   AgentConfiguration,
-  CoordinatorConfiguration,
   AgentExecutionContext,
   ExtensionConfiguration
 } from '../models';
@@ -482,14 +481,10 @@ export class DefaultDelegationEngine implements DelegationEngine {
   /**
    * Helper method to get agent configuration
    */
-  private async getAgentConfiguration(agentName: string): Promise<AgentConfiguration | CoordinatorConfiguration | null> {
+  private async getAgentConfiguration(agentName: string): Promise<AgentConfiguration | null> {
     const config = await this.configurationManager.loadConfiguration();
     
-    if (agentName === 'coordinator') {
-      return config.coordinator;
-    }
-    
-    return config.customAgents.find(agent => agent.name === agentName) || null;
+    return config.agents.find(agent => agent.name === agentName) || null;
   }
 
   /**

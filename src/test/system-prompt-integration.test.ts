@@ -12,7 +12,7 @@ import { DefaultDelegationEngine } from '../services/delegation-engine';
 import { 
   ExtensionConfiguration,
   AgentConfiguration,
-  CoordinatorConfiguration,
+  DEFAULT_EXTENSION_CONFIG,
   DEFAULT_COORDINATOR_CONFIG
 } from '../models';
 
@@ -22,8 +22,9 @@ class MockConfigurationManager {
 
   constructor(config?: ExtensionConfiguration) {
     this.config = config || {
-      coordinator: DEFAULT_COORDINATOR_CONFIG,
-      customAgents: [
+      entryAgent: 'coordinator',
+      agents: [
+        DEFAULT_COORDINATOR_CONFIG,
         {
           name: 'code-reviewer',
           systemPrompt: 'You are a code review specialist.',
@@ -81,7 +82,7 @@ suite('System Prompt Integration Tests', () => {
 
   test('Agent initialization uses extended system prompt with delegation information', async () => {
     const config = await configManager.loadConfiguration();
-    const coordinatorConfig = config.coordinator;
+    const coordinatorConfig = config.agents.find(agent => agent.name === 'coordinator')!;
 
     // Initialize coordinator agent with extension configuration
     const context = await agentEngine.initializeAgent(coordinatorConfig, config);
@@ -97,7 +98,7 @@ suite('System Prompt Integration Tests', () => {
 
   test('Agent with no delegation permissions has no extended system prompt', async () => {
     const config = await configManager.loadConfiguration();
-    const codeReviewerConfig = config.customAgents.find(a => a.name === 'code-reviewer')!;
+    const codeReviewerConfig = config.agents.find(a => a.name === 'code-reviewer')!;
 
     // Initialize code reviewer agent (has no delegation permissions)
     const context = await agentEngine.initializeAgent(codeReviewerConfig, config);
@@ -109,7 +110,7 @@ suite('System Prompt Integration Tests', () => {
 
   test('Agent with specific delegation permissions has limited delegation information', async () => {
     const config = await configManager.loadConfiguration();
-    const testEngineerConfig = config.customAgents.find(a => a.name === 'test-engineer')!;
+    const testEngineerConfig = config.agents.find(a => a.name === 'test-engineer')!;
 
     // Initialize test engineer agent (can only delegate to code-reviewer)
     const context = await agentEngine.initializeAgent(testEngineerConfig, config);
@@ -123,8 +124,8 @@ suite('System Prompt Integration Tests', () => {
 
   test('Child agent initialization includes extended system prompt', async () => {
     const config = await configManager.loadConfiguration();
-    const coordinatorConfig = config.coordinator;
-    const codeReviewerConfig = config.customAgents.find(a => a.name === 'code-reviewer')!;
+    const coordinatorConfig = config.agents.find(agent => agent.name === 'coordinator')!;
+    const codeReviewerConfig = config.agents.find(a => a.name === 'code-reviewer')!;
 
     // Initialize parent coordinator agent
     const parentContext = await agentEngine.initializeAgent(coordinatorConfig, config);
@@ -256,7 +257,7 @@ suite('System Prompt Integration Tests', () => {
 
   test('Agent execution context includes available delegation targets', async () => {
     const config = await configManager.loadConfiguration();
-    const coordinatorConfig = config.coordinator;
+    const coordinatorConfig = config.agents.find(agent => agent.name === 'coordinator')!;
 
     // Initialize coordinator agent
     const context = await agentEngine.initializeAgent(coordinatorConfig, config);
@@ -275,7 +276,7 @@ suite('System Prompt Integration Tests', () => {
 
   test('Agent initialization without extension config uses base system prompt', async () => {
     const config = await configManager.loadConfiguration();
-    const coordinatorConfig = config.coordinator;
+    const coordinatorConfig = config.agents.find(agent => agent.name === 'coordinator')!;
 
     // Initialize coordinator agent WITHOUT extension configuration
     const context = await agentEngine.initializeAgent(coordinatorConfig);
@@ -288,8 +289,8 @@ suite('System Prompt Integration Tests', () => {
 
   test('SystemPromptBuilder handles empty custom agents array', async () => {
     const configWithNoCustomAgents: ExtensionConfiguration = {
-      coordinator: DEFAULT_COORDINATOR_CONFIG,
-      customAgents: []
+      entryAgent: 'coordinator',
+      agents: [DEFAULT_COORDINATOR_CONFIG]
     };
 
     const extendedPrompt = systemPromptBuilder.buildSystemPrompt(

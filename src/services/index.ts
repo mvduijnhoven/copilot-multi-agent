@@ -11,3 +11,4 @@ export * from './error-handler';
 export * from './configuration-validator';
 export * from './compatibility-checker';
 export * from './system-prompt-builder';
+export * from './entry-agent-manager';

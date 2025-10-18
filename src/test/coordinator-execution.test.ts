@@ -169,12 +169,13 @@ suite('Coordinator Agent Execution Integration Tests', () => {
   test('should handle coordinator with delegation enabled', async () => {
     // Configure coordinator with delegation enabled
     const configWithDelegation: ExtensionConfiguration = {
-      coordinator: {
-        ...DEFAULT_COORDINATOR_CONFIG,
-        delegationPermissions: { type: 'all' },
-        toolPermissions: { type: 'specific', tools: ['delegateWork', 'reportOut'] }
-      },
-      customAgents: [
+      entryAgent: 'coordinator',
+      agents: [
+        {
+          ...DEFAULT_COORDINATOR_CONFIG,
+          delegationPermissions: { type: 'all' },
+          toolPermissions: { type: 'specific', tools: ['delegateWork', 'reportOut'] }
+        },
         {
           name: 'code-reviewer',
           systemPrompt: 'You are a code review specialist',
@@ -218,12 +219,14 @@ suite('Coordinator Agent Execution Integration Tests', () => {
   test('should handle coordinator with delegation disabled', async () => {
     // Configure coordinator with delegation disabled
     const configWithoutDelegation: ExtensionConfiguration = {
-      coordinator: {
-        ...DEFAULT_COORDINATOR_CONFIG,
-        delegationPermissions: { type: 'none' },
-        toolPermissions: { type: 'none' }
-      },
-      customAgents: []
+      entryAgent: 'coordinator',
+      agents: [
+        {
+          ...DEFAULT_COORDINATOR_CONFIG,
+          delegationPermissions: { type: 'none' },
+          toolPermissions: { type: 'none' }
+        }
+      ]
     };
 
     mockConfigManager.setConfiguration(configWithoutDelegation);
@@ -253,12 +256,13 @@ suite('Coordinator Agent Execution Integration Tests', () => {
   test('should handle coordinator with specific delegation permissions', async () => {
     // Configure coordinator with specific delegation permissions
     const configWithSpecificDelegation: ExtensionConfiguration = {
-      coordinator: {
-        ...DEFAULT_COORDINATOR_CONFIG,
-        delegationPermissions: { type: 'specific', agents: ['code-reviewer', 'tester'] },
-        toolPermissions: { type: 'specific', tools: ['delegateWork'] }
-      },
-      customAgents: [
+      entryAgent: 'coordinator',
+      agents: [
+        {
+          ...DEFAULT_COORDINATOR_CONFIG,
+          delegationPermissions: { type: 'specific', agents: ['code-reviewer', 'tester'] },
+          toolPermissions: { type: 'specific', tools: ['delegateWork'] }
+        },
         {
           name: 'code-reviewer',
           systemPrompt: 'You are a code review specialist',

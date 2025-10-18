@@ -9,14 +9,17 @@ import {
   ToolPermissions, 
   ToolAccessError,
   DEFAULT_EXTENSION_CONFIG,
-  AgentConfiguration 
+  DEFAULT_COORDINATOR_AGENT,
+  AgentConfiguration,
+  ExtensionConfiguration
 } from '../models';
 
 // Mock ConfigurationManager for testing
 class MockConfigurationManager implements IConfigurationManager {
-  private config = {
-    ...DEFAULT_EXTENSION_CONFIG,
-    customAgents: [
+  private config: ExtensionConfiguration = {
+    entryAgent: 'coordinator',
+    agents: [
+      DEFAULT_COORDINATOR_AGENT,
       {
         name: 'test-agent',
         systemPrompt: 'Test agent',
@@ -58,6 +61,11 @@ class MockConfigurationManager implements IConfigurationManager {
 
   getDefaultConfiguration() {
     return DEFAULT_EXTENSION_CONFIG;
+  }
+
+  async getEntryAgent() {
+    const entryAgentName = this.config.entryAgent;
+    return this.config.agents.find(agent => agent.name === entryAgentName) || this.config.agents[0] || null;
   }
 
   onConfigurationChanged(callback: (config: any) => void) {

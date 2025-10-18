@@ -114,11 +114,7 @@ When using the delegateWork tool, use one of these agent names: ${agentNames}`;
     agentName: string,
     configuration: ExtensionConfiguration
   ): AgentConfiguration | null {
-    if (agentName === 'coordinator') {
-      return configuration.coordinator;
-    }
-    
-    return configuration.customAgents.find(agent => agent.name === agentName) || null;
+    return configuration.agents.find(agent => agent.name === agentName) || null;
   }
 
   /**
@@ -130,16 +126,8 @@ When using the delegateWork tool, use one of these agent names: ${agentNames}`;
   ): DelegationTarget[] {
     const targets: DelegationTarget[] = [];
     
-    // Add coordinator if current agent is not coordinator
-    if (currentAgentName !== 'coordinator') {
-      targets.push({
-        name: configuration.coordinator.name,
-        useFor: configuration.coordinator.useFor
-      });
-    }
-    
-    // Add all custom agents except current one
-    configuration.customAgents.forEach(agent => {
+    // Add all agents except current one
+    configuration.agents.forEach(agent => {
       if (agent.name !== currentAgentName) {
         targets.push({
           name: agent.name,

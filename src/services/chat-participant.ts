@@ -10,7 +10,7 @@ import { DefaultDelegationEngine } from './delegation-engine';
 import { 
   CHAT_PARTICIPANT_ID, 
   CHAT_PARTICIPANT_NAME,
-  DEFAULT_COORDINATOR_CONFIG 
+  DEFAULT_EXTENSION_CONFIG 
 } from '../constants';
 import { 
   AgentExecutionError,
@@ -19,7 +19,7 @@ import {
   ConfigurationError,
   DelegationError
 } from '../models/errors';
-import { AgentExecutionContext } from '../models/agent-configuration';
+import { AgentExecutionContext, AgentConfiguration } from '../models/agent-configuration';
 
 export interface IMultiAgentChatParticipant {
   /**
@@ -159,10 +159,17 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
         return { metadata: { command: request.command || '', requestId: (request as any).requestId || 'unknown' } };
       }
       
-      // Initialize coordinator agent with error handling
-      let coordinatorContext;
+      // Get entry agent configuration
+      const entryAgent = config.agents.find(agent => agent.name === config.entryAgent) || config.agents[0];
+      if (!entryAgent) {
+        stream.markdown('❌ No entry agent configured. Please check your multi-agent settings.');
+        return { metadata: { command: request.command || '', requestId: (request as any).requestId || 'unknown' } };
+      }
+
+      // Initialize entry agent with error handling
+      let entryAgentContext;
       try {
-        coordinatorContext = await this.initializeCoordinatorAgent(config.coordinator);
+        entryAgentContext = await this.initializeEntryAgent(entryAgent);
       } catch (initError) {
         await this.handleAgentExecutionError(stream, initError, request);
         return { metadata: { command: request.command || '', requestId: (request as any).requestId || 'unknown' } };
@@ -171,7 +178,7 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
       // Process the request through the coordinator with comprehensive error handling
       try {
         await this.processCoordinatorRequest(
-          coordinatorContext,
+          entryAgentContext,
           request,
           context,
           stream,
@@ -233,12 +240,12 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
   }
 
   /**
-   * Initializes the coordinator agent with current configuration
+   * Initializes the entry agent with current configuration
    */
-  private async initializeCoordinatorAgent(coordinatorConfig: typeof DEFAULT_COORDINATOR_CONFIG): Promise<AgentExecutionContext> {
+  private async initializeEntryAgent(entryAgentConfig: AgentConfiguration): Promise<AgentExecutionContext> {
     try {
-      // Ensure we have a valid coordinator configuration
-      const config = coordinatorConfig || DEFAULT_COORDINATOR_CONFIG;
+      // Ensure we have a valid entry agent configuration
+      const config = entryAgentConfig;
       
       // Load the complete extension configuration for delegation context
       const extensionConfig = await this.configurationManager.loadConfiguration();
@@ -278,16 +285,16 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
       // Stream initial response
       stream.markdown('🤖 **Multi-Agent Coordinator** is processing your request...\n\n');
 
-      // Get coordinator configuration to check delegation permissions
+      // Get entry agent configuration to check delegation permissions
       const config = await this.configurationManager.loadConfiguration();
-      const coordinatorConfig = config.coordinator;
+      const entryAgentConfig = config.agents.find(agent => agent.name === config.entryAgent) || config.agents[0];
 
       // Apply tool filtering for coordinator agent
       const filteredTools = await this.toolFilter.getAvailableTools('coordinator');
       coordinatorContext.availableTools = filteredTools;
 
       // Provision delegation tools if delegation is allowed
-      const delegationTools = await this.provisionDelegationTools(coordinatorConfig, coordinatorContext);
+      const delegationTools = await this.provisionDelegationTools(entryAgentConfig, coordinatorContext);
       
       // Stream information about available capabilities
       await this.streamCoordinatorCapabilities(stream, coordinatorContext, delegationTools);
@@ -317,8 +324,8 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
       }
 
       // Show available custom agents if delegation is enabled
-      if (coordinatorConfig.delegationPermissions.type !== 'none') {
-        const availableAgents = await this.getAvailableAgentsForDelegation(coordinatorConfig);
+      if (entryAgentConfig.delegationPermissions.type !== 'none') {
+        const availableAgents = await this.getAvailableAgentsForDelegation(entryAgentConfig);
         if (availableAgents.length > 0) {
           stream.markdown(`*Available Agents: ${availableAgents.join(', ')}*\n`);
         }
@@ -337,19 +344,19 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
    * Provisions delegation tools for the coordinator agent based on permissions
    */
   private async provisionDelegationTools(
-    coordinatorConfig: typeof DEFAULT_COORDINATOR_CONFIG,
-    coordinatorContext: AgentExecutionContext
+    entryAgentConfig: AgentConfiguration,
+    entryAgentContext: AgentExecutionContext
   ): Promise<any[]> {
     const delegationTools: any[] = [];
 
     // Check if delegation is allowed
-    if (coordinatorConfig.delegationPermissions.type === 'none') {
+    if (entryAgentConfig.delegationPermissions.type === 'none') {
       return delegationTools;
     }
 
-    // Check if coordinator has access to delegation tools
-    const hasDelegate = await this.toolFilter.hasToolAccess('coordinator', 'delegateWork');
-    const hasReport = await this.toolFilter.hasToolAccess('coordinator', 'reportOut');
+    // Check if entry agent has access to delegation tools
+    const hasDelegate = await this.toolFilter.hasToolAccess(entryAgentConfig.name, 'delegateWork');
+    const hasReport = await this.toolFilter.hasToolAccess(entryAgentConfig.name, 'reportOut');
 
     if (hasDelegate) {
       // Create delegateWork tool instance for this coordinator
@@ -676,24 +683,24 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
    * Gets available agents for delegation based on coordinator permissions
    */
   private async getAvailableAgentsForDelegation(
-    coordinatorConfig: typeof DEFAULT_COORDINATOR_CONFIG
+    entryAgentConfig: AgentConfiguration
   ): Promise<string[]> {
     const config = await this.configurationManager.loadConfiguration();
-    const allCustomAgents = config.customAgents.map(agent => agent.name);
+    const allOtherAgents = config.agents.filter(agent => agent.name !== entryAgentConfig.name).map(agent => agent.name);
 
-    switch (coordinatorConfig.delegationPermissions.type) {
+    switch (entryAgentConfig.delegationPermissions.type) {
       case 'all':
-        return allCustomAgents;
+        return allOtherAgents;
       
       case 'none':
         return [];
       
       case 'specific':
-        if (!coordinatorConfig.delegationPermissions.agents) {
+        if (!entryAgentConfig.delegationPermissions.agents) {
           return [];
         }
-        return coordinatorConfig.delegationPermissions.agents.filter(agentName => 
-          allCustomAgents.includes(agentName)
+        return entryAgentConfig.delegationPermissions.agents.filter(agentName => 
+          allOtherAgents.includes(agentName)
         );
       
       default:

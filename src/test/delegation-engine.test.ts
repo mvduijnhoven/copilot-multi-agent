@@ -8,7 +8,6 @@ import { AgentEngine } from '../services/agent-engine';
 import { IConfigurationManager } from '../services/configuration-manager';
 import { 
   AgentConfiguration, 
-  CoordinatorConfiguration, 
   AgentExecutionContext,
   ExtensionConfiguration
 } from '../models';
@@ -57,22 +56,25 @@ class MockAgentEngine implements AgentEngine {
 
 class MockConfigurationManager implements IConfigurationManager {
   private config: ExtensionConfiguration = {
-    coordinator: {
-      name: 'coordinator',
-      systemPrompt: 'You are a coordinator',
-      description: 'Coordinates work',
-      useFor: 'Coordination',
-      delegationPermissions: { type: 'all' },
-      toolPermissions: { type: 'all' }
-    },
-    customAgents: [{
-      name: 'test-agent',
-      systemPrompt: 'You are a test agent',
-      description: 'Test agent',
-      useFor: 'Testing',
-      delegationPermissions: { type: 'none' },
-      toolPermissions: { type: 'all' }
-    }]
+    entryAgent: 'coordinator',
+    agents: [
+      {
+        name: 'coordinator',
+        systemPrompt: 'You are a coordinator',
+        description: 'Coordinates work',
+        useFor: 'Coordination',
+        delegationPermissions: { type: 'all' },
+        toolPermissions: { type: 'all' }
+      },
+      {
+        name: 'test-agent',
+        systemPrompt: 'You are a test agent',
+        description: 'Test agent',
+        useFor: 'Testing',
+        delegationPermissions: { type: 'none' },
+        toolPermissions: { type: 'all' }
+      }
+    ]
   };
   
   async loadConfiguration(): Promise<ExtensionConfiguration> {
@@ -91,6 +93,11 @@ class MockConfigurationManager implements IConfigurationManager {
     return this.config;
   }
   
+  async getEntryAgent() {
+    const entryAgentName = this.config.entryAgent;
+    return this.config.agents.find(agent => agent.name === entryAgentName) || this.config.agents[0] || null;
+  }
+
   onConfigurationChanged(listener: (config: ExtensionConfiguration) => void): void {}
   
   dispose(): void {}
@@ -126,22 +133,25 @@ export async function runDelegationEngineTests(): Promise<void> {
   console.log('Test 2: isValidDelegation with "none" permissions');
   
   mockConfigManager.setMockConfig({
-    coordinator: {
-      name: 'coordinator',
-      systemPrompt: 'You are a coordinator',
-      description: 'Coordinates work',
-      useFor: 'Coordination',
-      delegationPermissions: { type: 'none' },
-      toolPermissions: { type: 'all' }
-    },
-    customAgents: [{
-      name: 'test-agent',
-      systemPrompt: 'You are a test agent',
-      description: 'Test agent',
-      useFor: 'Testing',
-      delegationPermissions: { type: 'none' },
-      toolPermissions: { type: 'all' }
-    }]
+    entryAgent: 'coordinator',
+    agents: [
+      {
+        name: 'coordinator',
+        systemPrompt: 'You are a coordinator',
+        description: 'Coordinates work',
+        useFor: 'Coordination',
+        delegationPermissions: { type: 'none' },
+        toolPermissions: { type: 'all' }
+      },
+      {
+        name: 'test-agent',
+        systemPrompt: 'You are a test agent',
+        description: 'Test agent',
+        useFor: 'Testing',
+        delegationPermissions: { type: 'none' },
+        toolPermissions: { type: 'all' }
+      }
+    ]
   });
   
   const result2 = await delegationEngine.isValidDelegation('coordinator', 'test-agent');
@@ -153,22 +163,25 @@ export async function runDelegationEngineTests(): Promise<void> {
   console.log('Test 3: isValidDelegation with "specific" permissions');
   
   mockConfigManager.setMockConfig({
-    coordinator: {
-      name: 'coordinator',
-      systemPrompt: 'You are a coordinator',
-      description: 'Coordinates work',
-      useFor: 'Coordination',
-      delegationPermissions: { type: 'specific', agents: ['test-agent'] },
-      toolPermissions: { type: 'all' }
-    },
-    customAgents: [{
-      name: 'test-agent',
-      systemPrompt: 'You are a test agent',
-      description: 'Test agent',
-      useFor: 'Testing',
-      delegationPermissions: { type: 'none' },
-      toolPermissions: { type: 'all' }
-    }]
+    entryAgent: 'coordinator',
+    agents: [
+      {
+        name: 'coordinator',
+        systemPrompt: 'You are a coordinator',
+        description: 'Coordinates work',
+        useFor: 'Coordination',
+        delegationPermissions: { type: 'specific', agents: ['test-agent'] },
+        toolPermissions: { type: 'all' }
+      },
+      {
+        name: 'test-agent',
+        systemPrompt: 'You are a test agent',
+        description: 'Test agent',
+        useFor: 'Testing',
+        delegationPermissions: { type: 'none' },
+        toolPermissions: { type: 'all' }
+      }
+    ]
   });
   
   const result3 = await delegationEngine.isValidDelegation('coordinator', 'test-agent');

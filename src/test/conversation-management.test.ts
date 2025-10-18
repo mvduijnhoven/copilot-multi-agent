@@ -8,7 +8,6 @@ import { AgentEngine } from '../services/agent-engine';
 import { IConfigurationManager } from '../services/configuration-manager';
 import { 
   AgentConfiguration, 
-  CoordinatorConfiguration, 
   AgentExecutionContext,
   ExtensionConfiguration
 } from '../models';
@@ -78,15 +77,16 @@ class MockAgentEngine implements AgentEngine {
 
 class MockConfigurationManager implements IConfigurationManager {
   private config: ExtensionConfiguration = {
-    coordinator: {
-      name: 'coordinator',
-      systemPrompt: 'You are a coordinator',
-      description: 'Coordinates work',
-      useFor: 'Coordination',
-      delegationPermissions: { type: 'all' },
-      toolPermissions: { type: 'all' }
-    },
-    customAgents: [
+    entryAgent: 'coordinator',
+    agents: [
+      {
+        name: 'coordinator',
+        systemPrompt: 'You are a coordinator',
+        description: 'Coordinates work',
+        useFor: 'Coordination',
+        delegationPermissions: { type: 'all' },
+        toolPermissions: { type: 'all' }
+      },
       {
         name: 'test-agent',
         systemPrompt: 'You are a test agent',
@@ -122,6 +122,11 @@ class MockConfigurationManager implements IConfigurationManager {
     return this.config;
   }
   
+  async getEntryAgent() {
+    const entryAgentName = this.config.entryAgent;
+    return this.config.agents.find(agent => agent.name === entryAgentName) || this.config.agents[0] || null;
+  }
+
   onConfigurationChanged(listener: (config: ExtensionConfiguration) => void): void {}
   
   dispose(): void {}

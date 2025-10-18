@@ -5,16 +5,11 @@
 import * as vscode from 'vscode';
 import { 
   ExtensionConfiguration, 
-  CoordinatorConfiguration, 
   AgentConfiguration,
   ConfigurationValidator,
   DEFAULT_EXTENSION_CONFIG,
   ValidationResult
 } from '../models';
-import { 
-  EnhancedConfigurationValidator,
-  validateConfiguration
-} from './configuration-validator';
 import { ErrorHandler, createErrorContext } from './error-handler';
 import { ConfigurationError } from '../models/errors';
 
@@ -45,6 +40,12 @@ export interface IConfigurationManager {
   getDefaultConfiguration(): ExtensionConfiguration;
   
   /**
+   * Gets the entry agent configuration
+   * @returns The entry agent configuration or null if not found
+   */
+  getEntryAgent(): Promise<AgentConfiguration | null>;
+  
+  /**
    * Registers a listener for configuration changes
    * @param listener Function to call when configuration changes
    */
@@ -61,8 +62,8 @@ export interface IConfigurationManager {
  */
 export class ConfigurationManager implements IConfigurationManager {
   private static readonly CONFIGURATION_SECTION = 'copilotMultiAgent';
-  private static readonly COORDINATOR_KEY = 'coordinator';
-  private static readonly CUSTOM_AGENTS_KEY = 'customAgents';
+  private static readonly ENTRY_AGENT_KEY = 'entryAgent';
+  private static readonly AGENTS_KEY = 'agents';
   
   private configurationChangeListeners: ((config: ExtensionConfiguration) => void)[] = [];
   private disposables: vscode.Disposable[] = [];
@@ -84,42 +85,42 @@ export class ConfigurationManager implements IConfigurationManager {
     try {
       const config = vscode.workspace.getConfiguration(ConfigurationManager.CONFIGURATION_SECTION);
       
-      // Load coordinator configuration
-      const coordinatorConfigRaw = config.get<Omit<CoordinatorConfiguration, 'name'>>(ConfigurationManager.COORDINATOR_KEY);
-      const customAgents = config.get<AgentConfiguration[]>(ConfigurationManager.CUSTOM_AGENTS_KEY, []);
+      // Load entry agent and agents configuration
+      const entryAgent = config.get<string>(ConfigurationManager.ENTRY_AGENT_KEY);
+      const agents = config.get<AgentConfiguration[]>(ConfigurationManager.AGENTS_KEY, []);
       
-      // Build configuration object with coordinator name automatically set
-      const coordinatorConfig: CoordinatorConfiguration = coordinatorConfigRaw ? {
-        ...coordinatorConfigRaw,
-        name: 'coordinator' as const
-      } : undefined as any;
-      
-      const rawConfig = {
-        coordinator: coordinatorConfig,
-        customAgents: customAgents || []
+      // Build configuration object
+      const rawConfig: ExtensionConfiguration = {
+        entryAgent: entryAgent || '',
+        agents: agents || []
       };
       
-      // Use enhanced validation with error handling and migration
-      const validationResult = await validateConfiguration(rawConfig, 'loadConfiguration');
+      // Validate configuration
+      const validationResult = ConfigurationValidator.validateExtensionConfiguration(rawConfig);
       
       if (!validationResult.isValid) {
         // Log validation errors
         await errorHandler.handleError(
           new ConfigurationError(`Configuration validation failed: ${validationResult.errors.join(', ')}`),
           createErrorContext(undefined, undefined, 'loadConfiguration', { 
-            errors: validationResult.errors,
-            warnings: validationResult.warnings 
+            errors: validationResult.errors
           }),
           { notifyUser: false }
         );
+        
+        // Return default configuration if validation fails
+        return DEFAULT_EXTENSION_CONFIG;
       }
       
-      // Log warnings if any
-      if (validationResult.warnings.length > 0) {
-        console.warn('Configuration warnings:', validationResult.warnings);
+      // Handle entry agent validation and fallback
+      const entryAgentValidation = ConfigurationValidator.validateAndGetEntryAgent(rawConfig.entryAgent, rawConfig.agents);
+      if (!entryAgentValidation.isValid) {
+        console.warn('Entry agent validation failed:', entryAgentValidation.errors);
+        // Use the fallback entry agent
+        rawConfig.entryAgent = entryAgentValidation.entryAgent || DEFAULT_EXTENSION_CONFIG.entryAgent;
       }
       
-      return validationResult.config;
+      return rawConfig;
       
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -132,7 +133,7 @@ export class ConfigurationManager implements IConfigurationManager {
         { notifyUser: false }
       );
       
-      return EnhancedConfigurationValidator.getDefaultConfiguration();
+      return DEFAULT_EXTENSION_CONFIG;
     }
   }
 
@@ -143,8 +144,8 @@ export class ConfigurationManager implements IConfigurationManager {
     const errorHandler = ErrorHandler.getInstance();
     
     try {
-      // Enhanced validation before saving
-      const validationResult = await validateConfiguration(config, 'saveConfiguration');
+      // Validate configuration before saving
+      const validationResult = ConfigurationValidator.validateExtensionConfiguration(config);
       
       if (!validationResult.isValid) {
         const errorMessage = `Cannot save invalid configuration: ${validationResult.errors.join(', ')}`;
@@ -158,30 +159,21 @@ export class ConfigurationManager implements IConfigurationManager {
         throw new ConfigurationError(errorMessage);
       }
       
-      // Use the validated/fixed configuration for saving
-      const configToSave = validationResult.config;
-      
       const vsCodeConfig = vscode.workspace.getConfiguration(ConfigurationManager.CONFIGURATION_SECTION);
       
-      // Save coordinator configuration (exclude name field since it's always "coordinator")
-      const { name, ...coordinatorForSaving } = configToSave.coordinator;
+      // Save entry agent setting
       await vsCodeConfig.update(
-        ConfigurationManager.COORDINATOR_KEY, 
-        coordinatorForSaving, 
+        ConfigurationManager.ENTRY_AGENT_KEY, 
+        config.entryAgent, 
         vscode.ConfigurationTarget.Global
       );
       
-      // Save custom agents configuration
+      // Save agents configuration
       await vsCodeConfig.update(
-        ConfigurationManager.CUSTOM_AGENTS_KEY, 
-        configToSave.customAgents, 
+        ConfigurationManager.AGENTS_KEY, 
+        config.agents, 
         vscode.ConfigurationTarget.Global
       );
-      
-      // Log warnings if any
-      if (validationResult.warnings.length > 0) {
-        console.warn('Configuration saved with warnings:', validationResult.warnings);
-      }
       
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -202,7 +194,7 @@ export class ConfigurationManager implements IConfigurationManager {
    * Validates a configuration object
    */
   validateConfiguration(config: ExtensionConfiguration): boolean {
-    const validation = EnhancedConfigurationValidator.validateWithContext(config, 'validateConfiguration');
+    const validation = ConfigurationValidator.validateExtensionConfiguration(config);
     if (!validation.isValid) {
       console.error('Configuration validation failed:', validation.errors);
       return false;
@@ -214,7 +206,21 @@ export class ConfigurationManager implements IConfigurationManager {
    * Gets the default configuration
    */
   getDefaultConfiguration(): ExtensionConfiguration {
-    return EnhancedConfigurationValidator.getDefaultConfiguration();
+    return DEFAULT_EXTENSION_CONFIG;
+  }
+
+  /**
+   * Gets the entry agent configuration
+   */
+  async getEntryAgent(): Promise<AgentConfiguration | null> {
+    const config = await this.loadConfiguration();
+    const entryAgentName = config.entryAgent;
+    
+    if (!entryAgentName) {
+      return null;
+    }
+    
+    return config.agents.find(agent => agent.name === entryAgentName) || null;
   }
 
   /**
@@ -268,59 +274,73 @@ export class ConfigurationManager implements IConfigurationManager {
   /**
    * Gets a specific agent configuration by name
    */
-  async getAgentConfiguration(agentName: string): Promise<AgentConfiguration | CoordinatorConfiguration | null> {
+  async getAgentConfiguration(agentName: string): Promise<AgentConfiguration | null> {
     const config = await this.loadConfiguration();
-    
-    if (agentName === 'coordinator') {
-      return config.coordinator;
-    }
-    
-    return config.customAgents.find(agent => agent.name === agentName) || null;
+    return config.agents.find(agent => agent.name === agentName) || null;
   }
 
   /**
    * Updates a specific agent configuration
    */
-  async updateAgentConfiguration(agentName: string, agentConfig: AgentConfiguration | CoordinatorConfiguration): Promise<void> {
+  async updateAgentConfiguration(agentName: string, agentConfig: AgentConfiguration): Promise<void> {
     const config = await this.loadConfiguration();
     
-    if (agentName === 'coordinator') {
-      config.coordinator = agentConfig as CoordinatorConfiguration;
+    const agentIndex = config.agents.findIndex(agent => agent.name === agentName);
+    if (agentIndex >= 0) {
+      config.agents[agentIndex] = agentConfig;
     } else {
-      const agentIndex = config.customAgents.findIndex(agent => agent.name === agentName);
-      if (agentIndex >= 0) {
-        config.customAgents[agentIndex] = agentConfig as AgentConfiguration;
-      } else {
-        config.customAgents.push(agentConfig as AgentConfiguration);
-      }
+      config.agents.push(agentConfig);
     }
     
     await this.saveConfiguration(config);
   }
 
   /**
-   * Removes a custom agent configuration
+   * Removes an agent configuration
    */
   async removeAgentConfiguration(agentName: string): Promise<void> {
-    if (agentName === 'coordinator') {
-      throw new Error('Cannot remove coordinator agent');
-    }
-    
     const config = await this.loadConfiguration();
-    const agentIndex = config.customAgents.findIndex(agent => agent.name === agentName);
+    const agentIndex = config.agents.findIndex(agent => agent.name === agentName);
     
     if (agentIndex >= 0) {
-      config.customAgents.splice(agentIndex, 1);
+      config.agents.splice(agentIndex, 1);
+      
+      // If we're removing the entry agent, update to use the first remaining agent
+      if (config.entryAgent === agentName && config.agents.length > 0) {
+        config.entryAgent = config.agents[0].name;
+      } else if (config.entryAgent === agentName && config.agents.length === 0) {
+        // Reset to default if no agents left
+        const defaultConfig = this.getDefaultConfiguration();
+        config.entryAgent = defaultConfig.entryAgent;
+        config.agents = defaultConfig.agents;
+      }
+      
       await this.saveConfiguration(config);
     }
   }
 
   /**
-   * Gets all agent names (coordinator + custom agents)
+   * Gets all agent names
    */
   async getAllAgentNames(): Promise<string[]> {
     const config = await this.loadConfiguration();
-    return ['coordinator', ...config.customAgents.map(agent => agent.name)];
+    return config.agents.map(agent => agent.name);
+  }
+
+  /**
+   * Updates the entry agent setting
+   */
+  async updateEntryAgent(entryAgentName: string): Promise<void> {
+    const config = await this.loadConfiguration();
+    
+    // Validate that the entry agent exists
+    const entryAgentValidation = ConfigurationValidator.validateEntryAgent(entryAgentName, config.agents);
+    if (!entryAgentValidation.isValid) {
+      throw new ConfigurationError(`Invalid entry agent: ${entryAgentValidation.errors.join(', ')}`);
+    }
+    
+    config.entryAgent = entryAgentName;
+    await this.saveConfiguration(config);
   }
 
   /**
@@ -338,15 +358,29 @@ export class ConfigurationManager implements IConfigurationManager {
   async validateAndFixConfiguration(): Promise<{ fixed: boolean; errors: string[]; warnings: string[] }> {
     try {
       const currentConfig = await this.loadConfiguration();
-      const validationResult = await validateConfiguration(currentConfig, 'validateAndFix');
+      const validationResult = ConfigurationValidator.validateExtensionConfiguration(currentConfig);
       
-      if (!validationResult.isValid || validationResult.warnings.length > 0) {
-        // Save the fixed configuration
-        await this.saveConfiguration(validationResult.config);
+      if (!validationResult.isValid) {
+        // Try to fix common issues
+        let fixedConfig = { ...currentConfig };
+        let fixed = false;
+        
+        // Fix entry agent if invalid
+        const entryAgentValidation = ConfigurationValidator.validateAndGetEntryAgent(fixedConfig.entryAgent, fixedConfig.agents);
+        if (!entryAgentValidation.isValid && entryAgentValidation.entryAgent) {
+          fixedConfig.entryAgent = entryAgentValidation.entryAgent;
+          fixed = true;
+        }
+        
+        // If we made fixes, save the configuration
+        if (fixed) {
+          await this.saveConfiguration(fixedConfig);
+        }
+        
         return {
-          fixed: true,
+          fixed,
           errors: validationResult.errors,
-          warnings: validationResult.warnings
+          warnings: []
         };
       }
       

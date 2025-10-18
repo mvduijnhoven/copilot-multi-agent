@@ -11,7 +11,8 @@ import {
   AgentConfiguration, 
   AgentExecutionContext,
   ExtensionConfiguration,
-  DEFAULT_EXTENSION_CONFIG
+  DEFAULT_EXTENSION_CONFIG,
+  DEFAULT_COORDINATOR_AGENT
 } from '../models';
 
 // Enhanced mock implementations
@@ -125,8 +126,9 @@ class MockAgentEngine implements AgentEngine {
 
 class MockConfigurationManager implements IConfigurationManager {
   private config: ExtensionConfiguration = {
-    ...DEFAULT_EXTENSION_CONFIG,
-    customAgents: [
+    entryAgent: 'coordinator',
+    agents: [
+      DEFAULT_COORDINATOR_AGENT,
       {
         name: 'test-agent',
         systemPrompt: 'Test agent',
@@ -170,6 +172,11 @@ class MockConfigurationManager implements IConfigurationManager {
     return DEFAULT_EXTENSION_CONFIG;
   }
 
+  async getEntryAgent() {
+    const entryAgentName = this.config.entryAgent;
+    return this.config.agents.find(agent => agent.name === entryAgentName) || this.config.agents[0] || null;
+  }
+
   onConfigurationChanged(): void {}
   dispose(): void {}
 
@@ -190,11 +197,12 @@ suite('Comprehensive DelegationEngine Tests', () => {
     
     // Set up default configuration
     const defaultConfig: ExtensionConfiguration = {
-      coordinator: {
-        ...DEFAULT_EXTENSION_CONFIG.coordinator,
-        delegationPermissions: { type: 'all' }
-      },
-      customAgents: [
+      entryAgent: 'coordinator',
+      agents: [
+        {
+          ...DEFAULT_COORDINATOR_AGENT,
+          delegationPermissions: { type: 'all' }
+        },
         {
           name: 'test-agent',
           systemPrompt: 'Test agent',

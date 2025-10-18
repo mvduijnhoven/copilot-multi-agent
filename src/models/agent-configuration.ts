@@ -13,10 +13,6 @@ export interface AgentConfiguration {
   toolPermissions: ToolPermissions;
 }
 
-export interface CoordinatorConfiguration extends Omit<AgentConfiguration, 'name'> {
-  name: 'coordinator';
-}
-
 export type DelegationPermissions = 
   | { type: 'all' }
   | { type: 'none' }
@@ -28,8 +24,8 @@ export type ToolPermissions =
   | { type: 'specific'; tools: string[] };
 
 export interface ExtensionConfiguration {
-  coordinator: CoordinatorConfiguration;
-  customAgents: AgentConfiguration[];
+  entryAgent: string;
+  agents: AgentConfiguration[];
   version?: string;
 }
 
@@ -190,36 +186,69 @@ export class ConfigurationValidator {
   }
 
   /**
-   * Validates coordinator configuration
+   * Validates entry agent setting
    */
-  static validateCoordinatorConfiguration(config: any): ValidationResult {
+  static validateEntryAgent(entryAgent: string, agents: AgentConfiguration[]): ValidationResult {
     const errors: string[] = [];
 
-    if (!config || typeof config !== 'object') {
-      errors.push('Coordinator configuration must be an object');
+    if (!entryAgent || typeof entryAgent !== 'string') {
+      errors.push('Entry agent must be a non-empty string');
       return { isValid: false, errors };
     }
 
-    // Coordinator must have name 'coordinator'
-    if (config.name !== 'coordinator') {
-      errors.push('Coordinator name must be "coordinator"');
+    if (entryAgent.trim().length === 0) {
+      errors.push('Entry agent cannot be empty');
+      return { isValid: false, errors };
     }
 
-    // Validate other fields using agent validation
-    const agentValidation = this.validateAgentConfiguration({
-      ...config,
-      name: 'coordinator' // Override name for validation
-    });
-    
-    // Filter out name-related errors since we handle that separately
-    const filteredErrors = agentValidation.errors.filter(error => 
-      !error.includes('Agent name')
-    );
-    errors.push(...filteredErrors);
+    // Check if entry agent exists in agents array
+    const agentExists = agents.some(agent => agent.name === entryAgent);
+    if (!agentExists) {
+      errors.push(`Entry agent "${entryAgent}" does not exist in the agents configuration`);
+    }
 
     return {
       isValid: errors.length === 0,
       errors
+    };
+  }
+
+  /**
+   * Gets the default entry agent from a list of agents
+   */
+  static getDefaultEntryAgent(agents: AgentConfiguration[]): string | null {
+    if (agents.length === 0) {
+      return null;
+    }
+    return agents[0].name;
+  }
+
+  /**
+   * Validates and returns a safe entry agent name
+   */
+  static validateAndGetEntryAgent(entryAgent: string | undefined, agents: AgentConfiguration[]): ValidationResult & { entryAgent?: string } {
+    const errors: string[] = [];
+
+    if (agents.length === 0) {
+      errors.push('Cannot determine entry agent: no agents configured');
+      return { isValid: false, errors };
+    }
+
+    // If no entry agent specified, use first agent
+    if (!entryAgent || entryAgent.trim().length === 0) {
+      const defaultEntryAgent = this.getDefaultEntryAgent(agents);
+      return {
+        isValid: true,
+        errors: [],
+        entryAgent: defaultEntryAgent!
+      };
+    }
+
+    // Validate specified entry agent
+    const validation = this.validateEntryAgent(entryAgent, agents);
+    return {
+      ...validation,
+      entryAgent: validation.isValid ? entryAgent : undefined
     };
   }
 
@@ -234,56 +263,50 @@ export class ConfigurationValidator {
       return { isValid: false, errors };
     }
 
-    // Validate coordinator
-    if (!config.coordinator) {
-      errors.push('Coordinator configuration is required');
-    } else {
-      const coordinatorValidation = this.validateCoordinatorConfiguration(config.coordinator);
-      errors.push(...coordinatorValidation.errors.map(error => `Coordinator: ${error}`));
+    // Validate agents array
+    if (!Array.isArray(config.agents)) {
+      errors.push('Agents must be an array');
+      return { isValid: false, errors };
     }
 
-    // Validate custom agents
-    if (!Array.isArray(config.customAgents)) {
-      errors.push('Custom agents must be an array');
-    } else {
-      const agentNames = new Set<string>();
-      agentNames.add('coordinator'); // Reserve coordinator name
+    if (config.agents.length === 0) {
+      errors.push('At least one agent must be configured');
+      return { isValid: false, errors };
+    }
 
-      config.customAgents.forEach((agent: any, index: number) => {
-        const agentValidation = this.validateAgentConfiguration(agent);
-        errors.push(...agentValidation.errors.map(error => `Agent ${index + 1}: ${error}`));
+    // Validate each agent and collect names
+    const agentNames = new Set<string>();
+    config.agents.forEach((agent: any, index: number) => {
+      const agentValidation = this.validateAgentConfiguration(agent);
+      errors.push(...agentValidation.errors.map(error => `Agent ${index + 1}: ${error}`));
 
-        // Check for duplicate names
-        if (agent && agent.name) {
-          if (agentNames.has(agent.name)) {
-            errors.push(`Agent ${index + 1}: Duplicate agent name "${agent.name}"`);
-          } else {
-            agentNames.add(agent.name);
-          }
+      // Check for duplicate names
+      if (agent && agent.name) {
+        if (agentNames.has(agent.name)) {
+          errors.push(`Agent ${index + 1}: Duplicate agent name "${agent.name}"`);
+        } else {
+          agentNames.add(agent.name);
         }
-      });
+      }
+    });
 
-      // Validate delegation references
-      const allAgentNames = Array.from(agentNames);
-      config.customAgents.forEach((agent: any, index: number) => {
-        if (agent?.delegationPermissions?.type === 'specific') {
-          agent.delegationPermissions.agents?.forEach((targetAgent: string) => {
-            if (!allAgentNames.includes(targetAgent)) {
-              errors.push(`Agent ${index + 1}: References non-existent agent "${targetAgent}" in delegation permissions`);
-            }
-          });
-        }
-      });
+    // Validate entry agent
+    if (config.entryAgent !== undefined && config.entryAgent !== null) {
+      const entryAgentValidation = this.validateEntryAgent(config.entryAgent, config.agents);
+      errors.push(...entryAgentValidation.errors);
+    }
 
-      // Validate coordinator delegation references
-      if (config.coordinator?.delegationPermissions?.type === 'specific') {
-        config.coordinator.delegationPermissions.agents?.forEach((targetAgent: string) => {
+    // Validate delegation references
+    const allAgentNames = Array.from(agentNames);
+    config.agents.forEach((agent: any, index: number) => {
+      if (agent?.delegationPermissions?.type === 'specific') {
+        agent.delegationPermissions.agents?.forEach((targetAgent: string) => {
           if (!allAgentNames.includes(targetAgent)) {
-            errors.push(`Coordinator: References non-existent agent "${targetAgent}" in delegation permissions`);
+            errors.push(`Agent ${index + 1}: References non-existent agent "${targetAgent}" in delegation permissions`);
           }
         });
       }
-    }
+    });
 
     return {
       isValid: errors.length === 0,
@@ -295,7 +318,7 @@ export class ConfigurationValidator {
 /**
  * Default configurations
  */
-export const DEFAULT_COORDINATOR_CONFIG: CoordinatorConfiguration = {
+export const DEFAULT_COORDINATOR_AGENT: AgentConfiguration = {
   name: 'coordinator',
   systemPrompt: 'You are a coordinator agent responsible for orchestrating tasks and delegating work to specialized agents. Analyze the user\'s request and determine if it can be handled directly or if it should be delegated to a more specialized agent.',
   description: 'Coordinates work between specialized agents',
@@ -305,6 +328,6 @@ export const DEFAULT_COORDINATOR_CONFIG: CoordinatorConfiguration = {
 };
 
 export const DEFAULT_EXTENSION_CONFIG: ExtensionConfiguration = {
-  coordinator: DEFAULT_COORDINATOR_CONFIG,
-  customAgents: []
+  entryAgent: 'coordinator',
+  agents: [DEFAULT_COORDINATOR_AGENT]
 };

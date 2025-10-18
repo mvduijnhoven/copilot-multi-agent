@@ -24,11 +24,8 @@ class MockWorkflowEngine {
   }> = [];
 
   constructor(config: ExtensionConfiguration) {
-    // Register coordinator
-    this.agents.set('coordinator', config.coordinator);
-
-    // Register custom agents
-    config.customAgents.forEach(agent => {
+    // Register all agents
+    config.agents.forEach(agent => {
       this.agents.set(agent.name, agent);
     });
   }
@@ -136,11 +133,12 @@ suite('Integration Workflow Tests', () => {
 
   setup(() => {
     testConfig = {
-      coordinator: {
-        ...DEFAULT_COORDINATOR_CONFIG,
-        delegationPermissions: { type: 'all' }
-      },
-      customAgents: [
+      entryAgent: 'coordinator',
+      agents: [
+        {
+          ...DEFAULT_COORDINATOR_CONFIG,
+          delegationPermissions: { type: 'all' }
+        },
         {
           name: 'code-reviewer',
           systemPrompt: 'You are a code review specialist',
@@ -476,7 +474,8 @@ suite('Integration Workflow Tests', () => {
       // Create a workflow engine that simulates agent failure
       const faultyConfig: ExtensionConfiguration = {
         ...testConfig,
-        customAgents: [
+        agents: [
+          ...testConfig.agents,
           {
             name: 'faulty-agent',
             systemPrompt: 'I am a faulty agent',
@@ -520,10 +519,11 @@ suite('Integration Workflow Tests', () => {
       // Simulate configuration change by creating new engine
       const updatedConfig: ExtensionConfiguration = {
         ...testConfig,
-        coordinator: {
-          ...testConfig.coordinator,
-          delegationPermissions: { type: 'none' }
-        }
+        agents: testConfig.agents.map(agent => 
+          agent.name === 'coordinator' 
+            ? { ...agent, delegationPermissions: { type: 'none' } }
+            : agent
+        )
       };
 
       const updatedEngine = new MockWorkflowEngine(updatedConfig);

@@ -7,9 +7,9 @@ import { SystemPromptBuilder } from '../services/system-prompt-builder';
 import { 
   ExtensionConfiguration, 
   AgentConfiguration, 
-  CoordinatorConfiguration,
-  DEFAULT_COORDINATOR_CONFIG 
-} from '../models/agent-configuration';
+  DEFAULT_EXTENSION_CONFIG,
+  DEFAULT_COORDINATOR_CONFIG
+} from '../models';
 import { DelegationTarget } from '../models/system-prompt-builder';
 
 suite('SystemPromptBuilder', () => {
@@ -21,11 +21,12 @@ suite('SystemPromptBuilder', () => {
     
     // Create test configuration with coordinator and custom agents
     testConfiguration = {
-      coordinator: {
-        ...DEFAULT_COORDINATOR_CONFIG,
-        delegationPermissions: { type: 'all' }
-      },
-      customAgents: [
+      entryAgent: 'coordinator',
+      agents: [
+        {
+          ...DEFAULT_COORDINATOR_CONFIG,
+          delegationPermissions: { type: 'all' }
+        },
         {
           name: 'code-reviewer',
           systemPrompt: 'You are a code review specialist.',
@@ -101,7 +102,7 @@ suite('SystemPromptBuilder', () => {
     test('should handle specific delegation to non-existent agents gracefully', () => {
       const configWithInvalidRef: ExtensionConfiguration = {
         ...testConfiguration,
-        customAgents: [
+        agents: [
           {
             name: 'invalid-delegator',
             systemPrompt: 'Test agent',
@@ -110,7 +111,7 @@ suite('SystemPromptBuilder', () => {
             delegationPermissions: { type: 'specific', agents: ['non-existent-agent', 'test-engineer'] },
             toolPermissions: { type: 'none' }
           },
-          ...testConfiguration.customAgents
+          ...testConfiguration.agents
         ]
       };
 
@@ -226,8 +227,8 @@ suite('SystemPromptBuilder', () => {
   suite('edge cases and error handling', () => {
     test('should handle empty configuration gracefully', () => {
       const emptyConfig: ExtensionConfiguration = {
-        coordinator: DEFAULT_COORDINATOR_CONFIG,
-        customAgents: []
+        entryAgent: 'coordinator',
+        agents: [DEFAULT_COORDINATOR_CONFIG]
       };
 
       const targets = systemPromptBuilder.getDelegationTargets('coordinator', emptyConfig);
@@ -236,11 +237,13 @@ suite('SystemPromptBuilder', () => {
 
     test('should handle configuration with only coordinator', () => {
       const coordinatorOnlyConfig: ExtensionConfiguration = {
-        coordinator: {
-          ...DEFAULT_COORDINATOR_CONFIG,
-          delegationPermissions: { type: 'all' }
-        },
-        customAgents: []
+        entryAgent: 'coordinator',
+        agents: [
+          {
+            ...DEFAULT_COORDINATOR_CONFIG,
+            delegationPermissions: { type: 'all' }
+          }
+        ]
       };
 
       const targets = systemPromptBuilder.getDelegationTargets('coordinator', coordinatorOnlyConfig);
@@ -256,8 +259,9 @@ suite('SystemPromptBuilder', () => {
 
     test('should handle malformed delegation permissions gracefully', () => {
       const malformedConfig: ExtensionConfiguration = {
-        coordinator: DEFAULT_COORDINATOR_CONFIG,
-        customAgents: [
+        entryAgent: 'coordinator',
+        agents: [
+          DEFAULT_COORDINATOR_CONFIG,
           {
             name: 'malformed-agent',
             systemPrompt: 'Test',

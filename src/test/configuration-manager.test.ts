@@ -1,269 +1,585 @@
-import * as assert from 'assert';
+/**
+ * Unit tests for ConfigurationManager
+ */
+
+import { strict as assert } from 'assert';
+import * as sinon from 'sinon';
+import * as vscode from 'vscode';
+import { ConfigurationManager } from '../services/configuration-manager';
 import { 
-  ConfigurationValidator,
   ExtensionConfiguration, 
   AgentConfiguration, 
   DEFAULT_EXTENSION_CONFIG,
-  DEFAULT_COORDINATOR_CONFIG
+  DEFAULT_COORDINATOR_AGENT
 } from '../models/agent-configuration';
+import { ConfigurationError } from '../models/errors';
 
-// Note: These tests focus on the validation logic and configuration structure.
-// Full integration tests with VS Code APIs would require the VS Code test environment.
+suite('ConfigurationManager Tests', () => {
+  let configManager: ConfigurationManager;
+  let mockWorkspaceConfig: any;
+  let mockWorkspace: sinon.SinonStub;
+  let mockOnDidChangeConfiguration: sinon.SinonStub;
 
-suite('Configuration Manager Logic Test Suite', () => {
+  const testAgentConfig: AgentConfiguration = {
+    name: 'test-agent',
+    systemPrompt: 'You are a test agent',
+    description: 'Test agent for unit tests',
+    useFor: 'Testing purposes',
+    delegationPermissions: { type: 'none' },
+    toolPermissions: { type: 'all' }
+  };
 
-  suite('Configuration Structure Validation', () => {
-    test('should validate default extension configuration', () => {
-      const validation = ConfigurationValidator.validateExtensionConfiguration(DEFAULT_EXTENSION_CONFIG);
-      assert.strictEqual(validation.isValid, true);
-      assert.strictEqual(validation.errors.length, 0);
+  const testExtensionConfig: ExtensionConfiguration = {
+    entryAgent: 'coordinator',
+    agents: [DEFAULT_COORDINATOR_AGENT, testAgentConfig]
+  };
+
+  setup(() => {
+    // Create mock workspace configuration
+    mockWorkspaceConfig = {
+      get: sinon.stub(),
+      update: sinon.stub(),
+      has: sinon.stub(),
+      inspect: sinon.stub()
+    };
+
+    // Mock workspace.getConfiguration
+    mockWorkspace = sinon.stub(vscode.workspace, 'getConfiguration');
+    mockWorkspace.returns(mockWorkspaceConfig);
+
+    // Mock configuration change events
+    mockOnDidChangeConfiguration = sinon.stub(vscode.workspace, 'onDidChangeConfiguration');
+    mockOnDidChangeConfiguration.returns({ dispose: sinon.stub() });
+
+    configManager = new ConfigurationManager();
+  });
+
+  teardown(() => {
+    configManager.dispose();
+    sinon.restore();
+  });
+
+  suite('loadConfiguration', () => {
+    test('should load valid configuration from VS Code settings', async () => {
+      // Arrange
+      mockWorkspaceConfig.get.withArgs('entryAgent').returns('coordinator');
+      mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT]);
+
+      // Act
+      const config = await configManager.loadConfiguration();
+
+      // Assert
+      assert.strictEqual(config.entryAgent, 'coordinator');
+      assert.strictEqual(config.agents.length, 1);
+      assert.strictEqual(config.agents[0].name, 'coordinator');
     });
 
-    test('should validate configuration with custom agents', () => {
-      const configWithAgents: ExtensionConfiguration = {
-        coordinator: DEFAULT_COORDINATOR_CONFIG,
-        customAgents: [
-          {
-            name: 'code-reviewer',
-            systemPrompt: 'You are a code reviewer',
-            description: 'Reviews code for quality',
-            useFor: 'Code review',
-            delegationPermissions: { type: 'none' },
-            toolPermissions: { type: 'specific', tools: ['reportOut'] }
-          },
-          {
-            name: 'tester',
-            systemPrompt: 'You are a testing specialist',
-            description: 'Creates and runs tests',
-            useFor: 'Testing',
-            delegationPermissions: { type: 'specific', agents: ['code-reviewer'] },
-            toolPermissions: { type: 'all' }
-          }
-        ]
-      };
+    test('should return default configuration when no settings exist', async () => {
+      // Arrange
+      mockWorkspaceConfig.get.withArgs('entryAgent').returns(undefined);
+      mockWorkspaceConfig.get.withArgs('agents').returns([]);
 
-      const validation = ConfigurationValidator.validateExtensionConfiguration(configWithAgents);
-      assert.strictEqual(validation.isValid, true);
-      assert.strictEqual(validation.errors.length, 0);
+      // Act
+      const config = await configManager.loadConfiguration();
+
+      // Assert
+      assert.deepStrictEqual(config, DEFAULT_EXTENSION_CONFIG);
     });
 
-    test('should reject configuration with invalid delegation references', () => {
-      const configWithInvalidRefs: ExtensionConfiguration = {
-        coordinator: {
-          ...DEFAULT_COORDINATOR_CONFIG,
-          delegationPermissions: { type: 'specific', agents: ['non-existent-agent'] }
-        },
-        customAgents: []
-      };
+    test('should handle invalid entry agent by falling back to first agent', async () => {
+      // Arrange
+      mockWorkspaceConfig.get.withArgs('entryAgent').returns('non-existent-agent');
+      mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT]);
 
-      const validation = ConfigurationValidator.validateExtensionConfiguration(configWithInvalidRefs);
-      assert.strictEqual(validation.isValid, false);
-      assert.ok(validation.errors.some(error => error.includes('References non-existent agent "non-existent-agent"')));
+      // Act
+      const config = await configManager.loadConfiguration();
+
+      // Assert
+      assert.strictEqual(config.entryAgent, 'coordinator'); // Should fallback to first agent
+      assert.strictEqual(config.agents.length, 1);
     });
 
-    test('should reject configuration with duplicate agent names', () => {
-      const configWithDuplicates: ExtensionConfiguration = {
-        coordinator: DEFAULT_COORDINATOR_CONFIG,
-        customAgents: [
-          {
-            name: 'duplicate',
-            systemPrompt: 'First agent',
-            description: 'First',
-            useFor: 'First',
-            delegationPermissions: { type: 'none' },
-            toolPermissions: { type: 'all' }
-          },
-          {
-            name: 'duplicate',
-            systemPrompt: 'Second agent',
-            description: 'Second',
-            useFor: 'Second',
-            delegationPermissions: { type: 'none' },
-            toolPermissions: { type: 'all' }
-          }
-        ]
-      };
+    test('should handle empty entry agent by using first agent', async () => {
+      // Arrange
+      mockWorkspaceConfig.get.withArgs('entryAgent').returns('');
+      mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT]);
 
-      const validation = ConfigurationValidator.validateExtensionConfiguration(configWithDuplicates);
-      assert.strictEqual(validation.isValid, false);
-      assert.ok(validation.errors.some(error => error.includes('Duplicate agent name')));
+      // Act
+      const config = await configManager.loadConfiguration();
+
+      // Assert
+      assert.strictEqual(config.entryAgent, 'coordinator');
+    });
+
+    test('should return default config when loading fails', async () => {
+      // Arrange
+      mockWorkspaceConfig.get.throws(new Error('Settings access failed'));
+
+      // Act
+      const config = await configManager.loadConfiguration();
+
+      // Assert
+      assert.deepStrictEqual(config, DEFAULT_EXTENSION_CONFIG);
     });
   });
 
-  suite('Configuration Transformation Logic', () => {
-    test('should handle configuration with missing optional fields', () => {
-      const partialConfig = {
-        coordinator: {
-          name: 'coordinator',
-          systemPrompt: 'Test prompt',
-          description: 'Test description',
-          useFor: 'Test use',
-          delegationPermissions: { type: 'all' },
-          toolPermissions: { type: 'all' }
-        },
-        customAgents: []
-      };
+  suite('saveConfiguration', () => {
+    test('should save valid configuration to VS Code settings', async () => {
+      // Arrange
+      mockWorkspaceConfig.update.resolves();
 
-      const validation = ConfigurationValidator.validateExtensionConfiguration(partialConfig);
-      assert.strictEqual(validation.isValid, true);
+      // Act
+      await configManager.saveConfiguration(testExtensionConfig);
+
+      // Assert
+      assert.ok(mockWorkspaceConfig.update.calledWith('entryAgent', 'coordinator', vscode.ConfigurationTarget.Global));
+      assert.ok(mockWorkspaceConfig.update.calledWith('agents', testExtensionConfig.agents, vscode.ConfigurationTarget.Global));
     });
 
-    test('should validate complex delegation chains', () => {
-      const complexConfig: ExtensionConfiguration = {
-        coordinator: {
-          ...DEFAULT_COORDINATOR_CONFIG,
-          delegationPermissions: { type: 'specific', agents: ['agent1', 'agent2'] }
-        },
-        customAgents: [
-          {
-            name: 'agent1',
-            systemPrompt: 'Agent 1',
-            description: 'First agent',
-            useFor: 'First tasks',
-            delegationPermissions: { type: 'specific', agents: ['agent2', 'agent3'] },
-            toolPermissions: { type: 'all' }
-          },
-          {
-            name: 'agent2',
-            systemPrompt: 'Agent 2',
-            description: 'Second agent',
-            useFor: 'Second tasks',
-            delegationPermissions: { type: 'specific', agents: ['agent3'] },
-            toolPermissions: { type: 'all' }
-          },
-          {
-            name: 'agent3',
-            systemPrompt: 'Agent 3',
-            description: 'Third agent',
-            useFor: 'Third tasks',
-            delegationPermissions: { type: 'none' },
-            toolPermissions: { type: 'specific', tools: ['reportOut'] }
-          }
-        ]
+    test('should reject invalid configuration', async () => {
+      // Arrange
+      const invalidConfig: any = {
+        entryAgent: '',
+        agents: [] // Empty agents array is invalid
       };
 
-      const validation = ConfigurationValidator.validateExtensionConfiguration(complexConfig);
-      assert.strictEqual(validation.isValid, true);
-      assert.strictEqual(validation.errors.length, 0);
+      // Act & Assert
+      await assert.rejects(
+        () => configManager.saveConfiguration(invalidConfig),
+        ConfigurationError
+      );
     });
 
-    test('should validate tool permission configurations', () => {
-      const configWithToolPerms: ExtensionConfiguration = {
-        coordinator: {
-          ...DEFAULT_COORDINATOR_CONFIG,
-          toolPermissions: { type: 'specific', tools: ['delegateWork', 'reportOut', 'customTool'] }
-        },
-        customAgents: [
-          {
-            name: 'restricted-agent',
-            systemPrompt: 'Restricted agent',
-            description: 'Has limited tool access',
-            useFor: 'Restricted tasks',
-            delegationPermissions: { type: 'none' },
-            toolPermissions: { type: 'specific', tools: ['reportOut'] }
-          },
-          {
-            name: 'full-access-agent',
-            systemPrompt: 'Full access agent',
-            description: 'Has all tool access',
-            useFor: 'All tasks',
-            delegationPermissions: { type: 'none' },
-            toolPermissions: { type: 'all' }
-          },
-          {
-            name: 'no-tools-agent',
-            systemPrompt: 'No tools agent',
-            description: 'Has no tool access',
-            useFor: 'Basic tasks',
-            delegationPermissions: { type: 'none' },
-            toolPermissions: { type: 'none' }
-          }
-        ]
+    test('should reject configuration with invalid entry agent', async () => {
+      // Arrange
+      const invalidConfig: ExtensionConfiguration = {
+        entryAgent: 'non-existent',
+        agents: [DEFAULT_COORDINATOR_AGENT]
       };
 
-      const validation = ConfigurationValidator.validateExtensionConfiguration(configWithToolPerms);
-      assert.strictEqual(validation.isValid, true);
-      assert.strictEqual(validation.errors.length, 0);
+      // Act & Assert
+      await assert.rejects(
+        () => configManager.saveConfiguration(invalidConfig),
+        ConfigurationError
+      );
+    });
+
+    test('should handle VS Code update failures', async () => {
+      // Arrange
+      mockWorkspaceConfig.update.rejects(new Error('Update failed'));
+
+      // Act & Assert
+      await assert.rejects(
+        () => configManager.saveConfiguration(testExtensionConfig),
+        ConfigurationError
+      );
     });
   });
 
-  suite('Configuration Error Handling', () => {
-    test('should provide detailed error messages for invalid configurations', () => {
-      const invalidConfig = {
-        coordinator: {
-          name: 'wrong-name',
-          systemPrompt: '',
-          description: '',
-          useFor: '',
-          delegationPermissions: { type: 'invalid' },
-          toolPermissions: { type: 'invalid' }
-        },
-        customAgents: [
-          {
-            name: '',
-            systemPrompt: '',
-            description: '',
-            useFor: '',
-            delegationPermissions: { type: 'specific' }, // Missing agents array
-            toolPermissions: { type: 'specific' } // Missing tools array
-          }
-        ]
-      } as any;
+  suite('validateConfiguration', () => {
+    test('should return true for valid configuration', () => {
+      // Act
+      const isValid = configManager.validateConfiguration(testExtensionConfig);
 
-      const validation = ConfigurationValidator.validateExtensionConfiguration(invalidConfig);
-      assert.strictEqual(validation.isValid, false);
-      
-      // Should have multiple specific error messages
-      assert.ok(validation.errors.length > 5);
-      assert.ok(validation.errors.some(error => error.includes('Coordinator name must be "coordinator"')));
-      assert.ok(validation.errors.some(error => error.includes('Agent name cannot be empty')));
-      assert.ok(validation.errors.some(error => error.includes('must include an agents array')));
-      assert.ok(validation.errors.some(error => error.includes('must include a tools array')));
+      // Assert
+      assert.strictEqual(isValid, true);
     });
 
-    test('should handle null and undefined configurations gracefully', () => {
-      const nullValidation = ConfigurationValidator.validateExtensionConfiguration(null as any);
-      assert.strictEqual(nullValidation.isValid, false);
-      assert.ok(nullValidation.errors.some(error => error.includes('must be an object')));
+    test('should return false for invalid configuration', () => {
+      // Arrange
+      const invalidConfig: any = {
+        entryAgent: '',
+        agents: []
+      };
 
-      const undefinedValidation = ConfigurationValidator.validateExtensionConfiguration(undefined as any);
-      assert.strictEqual(undefinedValidation.isValid, false);
-      assert.ok(undefinedValidation.errors.some(error => error.includes('must be an object')));
+      // Act
+      const isValid = configManager.validateConfiguration(invalidConfig);
+
+      // Assert
+      assert.strictEqual(isValid, false);
     });
   });
 
-  suite('Default Configuration Properties', () => {
-    test('should have correct default coordinator configuration', () => {
-      assert.strictEqual(DEFAULT_COORDINATOR_CONFIG.name, 'coordinator');
-      assert.ok(DEFAULT_COORDINATOR_CONFIG.systemPrompt.length > 0);
-      assert.ok(DEFAULT_COORDINATOR_CONFIG.description.length > 0);
-      assert.ok(DEFAULT_COORDINATOR_CONFIG.useFor.length > 0);
-      assert.strictEqual(DEFAULT_COORDINATOR_CONFIG.delegationPermissions.type, 'all');
-      assert.strictEqual(DEFAULT_COORDINATOR_CONFIG.toolPermissions.type, 'specific');
-      
-      if (DEFAULT_COORDINATOR_CONFIG.toolPermissions.type === 'specific') {
-        assert.ok(Array.isArray(DEFAULT_COORDINATOR_CONFIG.toolPermissions.tools));
-        assert.ok(DEFAULT_COORDINATOR_CONFIG.toolPermissions.tools.includes('delegateWork'));
-        assert.ok(DEFAULT_COORDINATOR_CONFIG.toolPermissions.tools.includes('reportOut'));
-      }
+  suite('getDefaultConfiguration', () => {
+    test('should return default configuration', () => {
+      // Act
+      const defaultConfig = configManager.getDefaultConfiguration();
+
+      // Assert
+      assert.deepStrictEqual(defaultConfig, DEFAULT_EXTENSION_CONFIG);
+    });
+  });
+
+  suite('getEntryAgent', () => {
+    test('should return entry agent configuration', async () => {
+      // Arrange
+      mockWorkspaceConfig.get.withArgs('entryAgent').returns('coordinator');
+      mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT]);
+
+      // Act
+      const entryAgent = await configManager.getEntryAgent();
+
+      // Assert
+      assert.strictEqual(entryAgent?.name, 'coordinator');
     });
 
-    test('should have correct default extension configuration', () => {
-      assert.deepStrictEqual(DEFAULT_EXTENSION_CONFIG.coordinator, DEFAULT_COORDINATOR_CONFIG);
-      assert.ok(Array.isArray(DEFAULT_EXTENSION_CONFIG.customAgents));
-      assert.strictEqual(DEFAULT_EXTENSION_CONFIG.customAgents.length, 0);
+    test('should return null when entry agent not found', async () => {
+      // Arrange
+      mockWorkspaceConfig.get.withArgs('entryAgent').returns('non-existent');
+      mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT]);
+
+      // Act
+      const entryAgent = await configManager.getEntryAgent();
+
+      // Assert
+      assert.strictEqual(entryAgent, null);
     });
 
-    test('should create independent copies of default configuration', () => {
-      const config1 = JSON.parse(JSON.stringify(DEFAULT_EXTENSION_CONFIG));
-      const config2 = JSON.parse(JSON.stringify(DEFAULT_EXTENSION_CONFIG));
-      
-      // Modify one copy
-      config1.coordinator.systemPrompt = 'Modified prompt';
-      
-      // Other copy should be unchanged
-      assert.notStrictEqual(config1.coordinator.systemPrompt, config2.coordinator.systemPrompt);
-      assert.strictEqual(config2.coordinator.systemPrompt, DEFAULT_COORDINATOR_CONFIG.systemPrompt);
+    test('should return null when no entry agent configured', async () => {
+      // Arrange
+      mockWorkspaceConfig.get.withArgs('entryAgent').returns('');
+      mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT]);
+
+      // Act
+      const entryAgent = await configManager.getEntryAgent();
+
+      // Assert
+      assert.strictEqual(entryAgent, null);
+    });
+  });
+
+  suite('getAgentConfiguration', () => {
+    test('should return specific agent configuration', async () => {
+      // Arrange
+      mockWorkspaceConfig.get.withArgs('entryAgent').returns('coordinator');
+      mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT, testAgentConfig]);
+
+      // Act
+      const agent = await configManager.getAgentConfiguration('test-agent');
+
+      // Assert
+      assert.strictEqual(agent?.name, 'test-agent');
+    });
+
+    test('should return null for non-existent agent', async () => {
+      // Arrange
+      mockWorkspaceConfig.get.withArgs('entryAgent').returns('coordinator');
+      mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT]);
+
+      // Act
+      const agent = await configManager.getAgentConfiguration('non-existent');
+
+      // Assert
+      assert.strictEqual(agent, null);
+    });
+  });
+
+  suite('updateAgentConfiguration', () => {
+    test('should update existing agent configuration', async () => {
+      // Arrange
+      mockWorkspaceConfig.get.withArgs('entryAgent').returns('coordinator');
+      mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT, testAgentConfig]);
+      mockWorkspaceConfig.update.resolves();
+
+      const updatedAgent: AgentConfiguration = {
+        ...testAgentConfig,
+        description: 'Updated test agent'
+      };
+
+      // Act
+      await configManager.updateAgentConfiguration('test-agent', updatedAgent);
+
+      // Assert
+      assert.ok(mockWorkspaceConfig.update.calledWith('agents'));
+      const savedAgents = mockWorkspaceConfig.update.getCall(1).args[1] as AgentConfiguration[];
+      const updatedAgentInConfig = savedAgents.find(a => a.name === 'test-agent');
+      assert.strictEqual(updatedAgentInConfig?.description, 'Updated test agent');
+    });
+
+    test('should add new agent configuration', async () => {
+      // Arrange
+      mockWorkspaceConfig.get.withArgs('entryAgent').returns('coordinator');
+      mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT]);
+      mockWorkspaceConfig.update.resolves();
+
+      // Act
+      await configManager.updateAgentConfiguration('new-agent', testAgentConfig);
+
+      // Assert
+      assert.ok(mockWorkspaceConfig.update.calledWith('agents'));
+      const savedAgents = mockWorkspaceConfig.update.getCall(1).args[1] as AgentConfiguration[];
+      assert.strictEqual(savedAgents.length, 2);
+      assert.ok(savedAgents.some(a => a.name === 'test-agent'));
+    });
+  });
+
+  suite('removeAgentConfiguration', () => {
+    test('should remove agent configuration', async () => {
+      // Arrange
+      mockWorkspaceConfig.get.withArgs('entryAgent').returns('coordinator');
+      mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT, testAgentConfig]);
+      mockWorkspaceConfig.update.resolves();
+
+      // Act
+      await configManager.removeAgentConfiguration('test-agent');
+
+      // Assert
+      assert.ok(mockWorkspaceConfig.update.calledWith('agents'));
+      const savedAgents = mockWorkspaceConfig.update.getCall(1).args[1] as AgentConfiguration[];
+      assert.strictEqual(savedAgents.length, 1);
+      assert.ok(!savedAgents.some(a => a.name === 'test-agent'));
+    });
+
+    test('should update entry agent when removing current entry agent', async () => {
+      // Arrange
+      mockWorkspaceConfig.get.withArgs('entryAgent').returns('test-agent');
+      mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT, testAgentConfig]);
+      mockWorkspaceConfig.update.resolves();
+
+      // Act
+      await configManager.removeAgentConfiguration('test-agent');
+
+      // Assert
+      assert.ok(mockWorkspaceConfig.update.calledWith('entryAgent', 'coordinator'));
+    });
+
+    test('should reset to default when removing last agent', async () => {
+      // Arrange
+      mockWorkspaceConfig.get.withArgs('entryAgent').returns('test-agent');
+      mockWorkspaceConfig.get.withArgs('agents').returns([testAgentConfig]);
+      mockWorkspaceConfig.update.resolves();
+
+      // Act
+      await configManager.removeAgentConfiguration('test-agent');
+
+      // Assert
+      assert.ok(mockWorkspaceConfig.update.calledWith('entryAgent', DEFAULT_EXTENSION_CONFIG.entryAgent));
+      assert.ok(mockWorkspaceConfig.update.calledWith('agents', DEFAULT_EXTENSION_CONFIG.agents));
+    });
+  });
+
+  suite('getAllAgentNames', () => {
+    test('should return all agent names', async () => {
+      // Arrange
+      mockWorkspaceConfig.get.withArgs('entryAgent').returns('coordinator');
+      mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT, testAgentConfig]);
+
+      // Act
+      const names = await configManager.getAllAgentNames();
+
+      // Assert
+      assert.deepStrictEqual(names, ['coordinator', 'test-agent']);
+    });
+
+    test('should return empty array when no agents configured', async () => {
+      // Arrange
+      mockWorkspaceConfig.get.withArgs('entryAgent').returns('');
+      mockWorkspaceConfig.get.withArgs('agents').returns([]);
+
+      // Act
+      const names = await configManager.getAllAgentNames();
+
+      // Assert
+      assert.deepStrictEqual(names, []);
+    });
+  });
+
+  suite('updateEntryAgent', () => {
+    test('should update entry agent to valid agent', async () => {
+      // Arrange
+      mockWorkspaceConfig.get.withArgs('entryAgent').returns('coordinator');
+      mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT, testAgentConfig]);
+      mockWorkspaceConfig.update.resolves();
+
+      // Act
+      await configManager.updateEntryAgent('test-agent');
+
+      // Assert
+      assert.ok(mockWorkspaceConfig.update.calledWith('entryAgent', 'test-agent'));
+    });
+
+    test('should reject invalid entry agent', async () => {
+      // Arrange
+      mockWorkspaceConfig.get.withArgs('entryAgent').returns('coordinator');
+      mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT]);
+
+      // Act & Assert
+      await assert.rejects(
+        () => configManager.updateEntryAgent('non-existent'),
+        ConfigurationError
+      );
+    });
+  });
+
+  suite('resetToDefaults', () => {
+    test('should reset configuration to defaults', async () => {
+      // Arrange
+      mockWorkspaceConfig.update.resolves();
+
+      // Act
+      await configManager.resetToDefaults();
+
+      // Assert
+      assert.ok(mockWorkspaceConfig.update.calledWith('entryAgent', DEFAULT_EXTENSION_CONFIG.entryAgent));
+      assert.ok(mockWorkspaceConfig.update.calledWith('agents', DEFAULT_EXTENSION_CONFIG.agents));
+    });
+  });
+
+  suite('validateAndFixConfiguration', () => {
+    test('should return no fixes needed for valid configuration', async () => {
+      // Arrange
+      mockWorkspaceConfig.get.withArgs('entryAgent').returns('coordinator');
+      mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT]);
+
+      // Act
+      const result = await configManager.validateAndFixConfiguration();
+
+      // Assert
+      assert.strictEqual(result.fixed, false);
+      assert.strictEqual(result.errors.length, 0);
+    });
+
+    test('should fix invalid entry agent', async () => {
+      // Arrange
+      mockWorkspaceConfig.get.withArgs('entryAgent').returns('non-existent');
+      mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT]);
+      mockWorkspaceConfig.update.resolves();
+
+      // Act
+      const result = await configManager.validateAndFixConfiguration();
+
+      // Assert
+      assert.strictEqual(result.fixed, true);
+      assert.ok(mockWorkspaceConfig.update.calledWith('entryAgent', 'coordinator'));
+    });
+
+    test('should handle validation errors gracefully', async () => {
+      // Arrange
+      mockWorkspaceConfig.get.throws(new Error('Settings access failed'));
+
+      // Act
+      const result = await configManager.validateAndFixConfiguration();
+
+      // Assert
+      assert.strictEqual(result.fixed, false);
+      assert.ok(result.errors.length > 0);
+    });
+  });
+
+  suite('configuration change handling', () => {
+    test('should register configuration change listener', () => {
+      // Assert
+      assert.ok(mockOnDidChangeConfiguration.calledOnce);
+    });
+
+    test('should notify listeners on configuration change', async () => {
+      // Arrange
+      const listener = sinon.stub();
+      configManager.onConfigurationChanged(listener);
+
+      mockWorkspaceConfig.get.withArgs('entryAgent').returns('coordinator');
+      mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT]);
+
+      // Simulate configuration change event
+      const changeEvent = {
+        affectsConfiguration: sinon.stub().returns(true)
+      };
+
+      // Act
+      const changeHandler = mockOnDidChangeConfiguration.getCall(0).args[0];
+      await changeHandler(changeEvent);
+
+      // Assert
+      assert.ok(listener.calledOnce);
+      assert.ok(changeEvent.affectsConfiguration.calledWith('copilotMultiAgent'));
+    });
+
+    test('should not notify listeners for unrelated configuration changes', async () => {
+      // Arrange
+      const listener = sinon.stub();
+      configManager.onConfigurationChanged(listener);
+
+      // Simulate unrelated configuration change event
+      const changeEvent = {
+        affectsConfiguration: sinon.stub().returns(false)
+      };
+
+      // Act
+      const changeHandler = mockOnDidChangeConfiguration.getCall(0).args[0];
+      await changeHandler(changeEvent);
+
+      // Assert
+      assert.ok(listener.notCalled);
+    });
+
+    test('should handle listener errors gracefully', async () => {
+      // Arrange
+      const faultyListener = sinon.stub().throws(new Error('Listener error'));
+      configManager.onConfigurationChanged(faultyListener);
+
+      mockWorkspaceConfig.get.withArgs('entryAgent').returns('coordinator');
+      mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT]);
+
+      // Simulate configuration change event
+      const changeEvent = {
+        affectsConfiguration: sinon.stub().returns(true)
+      };
+
+      // Act & Assert (should not throw)
+      const changeHandler = mockOnDidChangeConfiguration.getCall(0).args[0];
+      await changeHandler(changeEvent);
+
+      assert.ok(faultyListener.calledOnce);
+    });
+
+    test('should remove configuration change listener', () => {
+      // Arrange
+      const listener = sinon.stub();
+      configManager.onConfigurationChanged(listener);
+
+      // Act
+      configManager.removeConfigurationChangeListener(listener);
+
+      // Assert - listener should not be called after removal
+      mockWorkspaceConfig.get.withArgs('entryAgent').returns('coordinator');
+      mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT]);
+
+      const changeEvent = {
+        affectsConfiguration: sinon.stub().returns(true)
+      };
+
+      const changeHandler = mockOnDidChangeConfiguration.getCall(0).args[0];
+      changeHandler(changeEvent);
+
+      assert.ok(listener.notCalled);
+    });
+  });
+
+  suite('dispose', () => {
+    test('should dispose of all resources', () => {
+      // Arrange
+      const disposeSpy = sinon.spy();
+      mockOnDidChangeConfiguration.returns({ dispose: disposeSpy });
+
+      const newConfigManager = new ConfigurationManager();
+
+      // Act
+      newConfigManager.dispose();
+
+      // Assert
+      assert.ok(disposeSpy.calledOnce);
+    });
+
+    test('should clear all listeners on dispose', () => {
+      // Arrange
+      const listener = sinon.stub();
+      configManager.onConfigurationChanged(listener);
+
+      // Act
+      configManager.dispose();
+
+      // Assert - listeners should be cleared
+      assert.strictEqual(configManager['configurationChangeListeners'].length, 0);
     });
   });
 });

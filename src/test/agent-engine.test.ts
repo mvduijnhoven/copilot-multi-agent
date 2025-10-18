@@ -11,14 +11,17 @@ import {
   AgentConfiguration, 
   AgentExecutionContext, 
   AgentExecutionError,
-  DEFAULT_EXTENSION_CONFIG 
+  DEFAULT_EXTENSION_CONFIG,
+  DEFAULT_COORDINATOR_AGENT,
+  ExtensionConfiguration
 } from '../models';
 
 // Mock ConfigurationManager for testing
 class MockConfigurationManager implements IConfigurationManager {
-  private config = {
-    ...DEFAULT_EXTENSION_CONFIG,
-    customAgents: [
+  private config: ExtensionConfiguration = {
+    entryAgent: 'coordinator',
+    agents: [
+      DEFAULT_COORDINATOR_AGENT,
       {
         name: 'test-agent',
         systemPrompt: 'You are a test agent for unit testing.',
@@ -76,6 +79,11 @@ class MockConfigurationManager implements IConfigurationManager {
 
   getDefaultConfiguration() {
     return DEFAULT_EXTENSION_CONFIG;
+  }
+
+  async getEntryAgent() {
+    const entryAgentName = this.config.entryAgent;
+    return this.config.agents.find(agent => agent.name === entryAgentName) || this.config.agents[0] || null;
   }
 
   onConfigurationChanged(callback: (config: any) => void) {

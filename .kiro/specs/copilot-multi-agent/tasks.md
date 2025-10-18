@@ -8,24 +8,31 @@
 
 - [x] 2. Implement configuration management system
   - [x] 2.1 Create configuration data models and validation
-    - Write TypeScript interfaces for AgentConfiguration, CoordinatorConfiguration, and related types
-    - Implement configuration validation functions with proper error handling
+    - Write TypeScript interfaces for AgentConfiguration, ExtensionConfiguration, and related types
+    - Implement configuration validation functions with proper error handling including entry agent validation
     - Create unit tests for configuration validation logic
-    - _Requirements: 1.2, 3.1, 3.5, 6.3_
+    - _Requirements: 1.2, 3.1, 3.5, 6.3, 10.2_
 
   - [x] 2.2 Implement VS Code settings integration
     - Create ConfigurationManager class to handle VS Code settings API integration
-    - Implement methods for reading, writing, and validating configuration from VS Code settings
+    - Implement methods for reading, writing, and validating configuration from VS Code settings including entry agent setting
     - Add configuration change listeners and real-time updates
     - Write unit tests for configuration persistence and retrieval
-    - _Requirements: 5.1, 5.2, 5.4_
+    - _Requirements: 5.1, 5.2, 5.4, 10.1_
 
   - [x] 2.3 Create configuration UI contribution points
     - Define configuration schema in package.json contributes.configuration section
-    - Implement settings UI for coordinator and custom agent configuration
-    - Add validation and error display for configuration fields
+    - Implement settings UI for entry agent selection and agent configuration
+    - Add validation and error display for configuration fields including entry agent validation
     - Write integration tests for settings UI functionality
-    - _Requirements: 5.1, 5.2, 5.3_
+    - _Requirements: 5.1, 5.2, 5.3, 10.1, 10.2_
+
+- [x] 2.4 Implement entry agent management
+    - Create EntryAgentManager class to handle entry agent selection and validation
+    - Implement methods to get entry agent, validate entry agent configuration, and provide fallback logic
+    - Add entry agent resolution with proper error handling when configured agent is not found
+    - Write unit tests for entry agent management and fallback scenarios
+    - _Requirements: 10.1, 10.2, 10.4, 10.5, 6.5_
 
 - [x] 3. Implement core agent engine
   - [x] 3.1 Create agent execution context management
@@ -81,19 +88,19 @@
     - _Requirements: 7.3, 7.4, 8.4_
 
 - [x] 6. Implement chat participant integration
-  - [x] 6.1 Create multi-agent chat participant
+  - [-] 6.1 Create multi-agent chat participant
     - Implement MultiAgentChatParticipant class extending VS Code ChatParticipant
     - Add chat participant registration and lifecycle management
-    - Implement request routing to coordinator agent with proper context handling
+    - Implement request routing to entry agent with proper context handling and fallback logic
     - Write integration tests for chat participant registration and basic functionality
-    - _Requirements: 4.1, 4.2, 9.1_
+    - _Requirements: 4.1, 4.2, 10.3, 10.5, 11.1_
 
-  - [x] 6.2 Integrate coordinator agent execution
-    - Connect chat participant to coordinator agent with configured system prompt
-    - Implement tool filtering for coordinator agent based on permissions
+  - [ ] 6.2 Integrate entry agent execution
+    - Connect chat participant to entry agent with configured system prompt
+    - Implement tool filtering for entry agent based on permissions
     - Add delegation tool provisioning when delegation is allowed
-    - Write integration tests for coordinator agent execution flow
-    - _Requirements: 1.3, 1.4, 4.2, 4.4_
+    - Write integration tests for entry agent execution flow
+    - _Requirements: 1.3, 1.4, 4.2, 4.4, 10.3_
 
   - [x] 6.4 Update agent execution to use extended system prompts
     - Integrate SystemPromptBuilder into agent execution context creation
@@ -124,53 +131,66 @@
     - Write unit tests for configuration validation and default handling
     - _Requirements: 5.3, 6.3_
 
-- [x] 8. Create extension activation and lifecycle management
-  - [x] 8.1 Update extension activation logic
-    - Modify extension.ts to initialize multi-agent system on activation
-    - Add proper extension context management and cleanup
-    - Implement configuration loading and chat participant registration
-    - Write integration tests for extension activation and deactivation
-    - _Requirements: 4.1, 9.1, 9.4_
+- [x] 8. Update configuration structure for entry agent support
+  - [x] 8.1 Update configuration interfaces and models
+    - Update configuration interfaces to remove CoordinatorConfiguration and use unified AgentConfiguration
+    - Update all references from coordinator to entry agent throughout the codebase
+    - Modify configuration validation to handle entry agent setting and agent array structure
+    - _Requirements: 1.1, 1.6, 10.1, 10.2_
 
-  - [x] 8.2 Add extension compatibility and integration
+  - [x] 8.2 Update configuration validation for entry agent
+    - Add validation for entry agent existence in agents array
+    - Update error messages and fallback logic for new configuration structure
+    - Write comprehensive tests for new configuration validation
+    - _Requirements: 10.2, 10.4, 10.5, 6.5_
+
+- [x] 9. Create extension activation and lifecycle management
+  - [-] 9.1 Update extension activation logic
+    - Modify extension.ts to initialize multi-agent system on activation with entry agent support
+    - Add proper extension context management and cleanup
+    - Implement configuration loading and chat participant registration with entry agent resolution
+    - Write integration tests for extension activation and deactivation
+    - _Requirements: 4.1, 10.3, 11.1, 11.4_
+
+  - [x] 9.2 Add extension compatibility and integration
     - Ensure seamless integration with existing GitHub Copilot Chat functionality
     - Implement compatibility checks and graceful degradation
     - Add extension disable/enable handling with proper cleanup
     - Write integration tests for compatibility with existing VS Code features
-    - _Requirements: 9.1, 9.2, 9.3, 9.4_
+    - _Requirements: 11.1, 11.2, 11.3, 11.4_
 
-- [x] 9. Create comprehensive test suite
-  - [x] 9.1 Implement unit tests for all core components
-    - Create test suites for configuration management, agent engine, and delegation system
-    - Add test coverage for error scenarios and edge cases
+- [x] 10. Create comprehensive test suite
+  - [-] 10.1 Implement unit tests for all core components
+    - Create test suites for configuration management, agent engine, delegation system, and entry agent management
+    - Add test coverage for error scenarios and edge cases including entry agent fallback
     - Implement mock objects for VS Code API dependencies
     - Ensure test coverage meets quality standards
     - _Requirements: All requirements for component validation_
 
-  - [ ] 9.3 Add tests for system prompt extension functionality
+  - [ ] 10.2 Add tests for system prompt extension functionality
     - Create unit tests for SystemPromptBuilder class and delegation target resolution
     - Add tests for system prompt formatting with different delegation permission types
     - Implement tests for delegateWork tool agent name enumeration
     - Write integration tests for extended system prompts in agent execution contexts
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6_
 
-  - [x] 9.2 Create integration tests for multi-agent workflows
-    - Write tests for end-to-end delegation scenarios
+  - [-] 10.3 Create integration tests for multi-agent workflows
+    - Write tests for end-to-end delegation scenarios including entry agent routing
     - Add tests for configuration updates during execution
     - Create tests for concurrent agent execution and interaction
     - Implement performance and stress testing scenarios
-    - _Requirements: 7.3, 7.4, 8.4, 8.5_
+    - _Requirements: 7.3, 7.4, 8.4, 8.5, 10.3_
 
-- [x] 10. Finalize extension packaging and documentation
-  - [x] 10.1 Update package.json and extension metadata
+- [x] 11. Finalize extension packaging and documentation
+  - [x] 11.1 Update package.json and extension metadata
     - Complete package.json with proper dependencies, contributions, and metadata
     - Add extension icon, description, repository and marketplace information
     - Configure build scripts and packaging for distribution
-    - _Requirements: 9.1, 9.4_
+    - _Requirements: 11.1, 11.4_
 
-  - [x] 10.2 Create user documentation and examples
-    - Write README with setup instructions and configuration examples
+  - [x] 11.2 Create user documentation and examples
+    - Write README with setup instructions and configuration examples including entry agent setup
     - Create example agent configurations for common use cases
     - Add troubleshooting guide and FAQ section
     - Document API and extension points for advanced users
-    - _Requirements: 5.1, 5.2_
+    - _Requirements: 5.1, 5.2, 10.1_

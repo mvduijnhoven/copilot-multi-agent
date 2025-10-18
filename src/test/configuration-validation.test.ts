@@ -10,26 +10,26 @@ import {
 } from '../services/configuration-validator';
 import { 
   ExtensionConfiguration,
-  CoordinatorConfiguration,
   AgentConfiguration,
   DEFAULT_EXTENSION_CONFIG,
   DEFAULT_COORDINATOR_CONFIG
-} from '../models/agent-configuration';
+} from '../models';
 
 suite('Enhanced Configuration Validation Tests', () => {
   
   suite('Basic Validation', () => {
     test('should validate valid configuration', () => {
       const validConfig: ExtensionConfiguration = {
-        coordinator: {
-          name: 'coordinator',
-          systemPrompt: 'You are a coordinator agent responsible for task orchestration.',
-          description: 'Coordinates work between agents',
-          useFor: 'Task orchestration and delegation',
-          delegationPermissions: { type: 'all' },
-          toolPermissions: { type: 'specific', tools: ['delegateWork', 'reportOut'] }
-        },
-        customAgents: [
+        entryAgent: 'coordinator',
+        agents: [
+          {
+            name: 'coordinator',
+            systemPrompt: 'You are a coordinator agent responsible for task orchestration.',
+            description: 'Coordinates work between agents',
+            useFor: 'Task orchestration and delegation',
+            delegationPermissions: { type: 'all' },
+            toolPermissions: { type: 'specific', tools: ['delegateWork', 'reportOut'] }
+          },
           {
             name: 'code-reviewer',
             systemPrompt: 'You are a code review specialist focused on quality and best practices.',
@@ -149,8 +149,9 @@ suite('Enhanced Configuration Validation Tests', () => {
   suite('Custom Agents Validation', () => {
     test('should validate agent name uniqueness', () => {
       const config = {
-        coordinator: DEFAULT_COORDINATOR_CONFIG,
-        customAgents: [
+        entryAgent: 'coordinator',
+        agents: [
+          DEFAULT_COORDINATOR_CONFIG,
           {
             name: 'test-agent',
             systemPrompt: 'Test prompt for agent 1',
@@ -585,8 +586,8 @@ suite('Enhanced Configuration Validation Tests', () => {
 
       const migrationResult = EnhancedConfigurationValidator.migrateConfiguration(configWithoutCoordinator);
       assert.strictEqual(migrationResult.migrated, true);
-      assert.ok(migrationResult.changes.some(change => change.includes('Added default coordinator')));
-      assert.ok(migrationResult.config.coordinator);
+      assert.ok(migrationResult.changes.some(change => change.includes('unified agents structure')));
+      assert.ok(migrationResult.config.agents && migrationResult.config.agents.length > 0);
     });
 
     test('should migrate non-array customAgents', () => {
@@ -597,8 +598,8 @@ suite('Enhanced Configuration Validation Tests', () => {
 
       const migrationResult = EnhancedConfigurationValidator.migrateConfiguration(configWithInvalidAgents);
       assert.strictEqual(migrationResult.migrated, true);
-      assert.ok(migrationResult.changes.some(change => change.includes('Initialized custom agents array')));
-      assert.ok(Array.isArray(migrationResult.config.customAgents));
+      assert.ok(migrationResult.changes.some(change => change.includes('unified agents structure')));
+      assert.ok(Array.isArray(migrationResult.config.agents));
     });
   });
 
@@ -608,13 +609,13 @@ suite('Enhanced Configuration Validation Tests', () => {
       const result = EnhancedConfigurationValidator.validateWithContext(defaultConfig);
       
       assert.strictEqual(result.isValid, true, `Default config should be valid: ${result.errors.join(', ')}`);
-      assert.ok(defaultConfig.coordinator);
-      assert.ok(Array.isArray(defaultConfig.customAgents));
+      assert.ok(defaultConfig.entryAgent);
+      assert.ok(Array.isArray(defaultConfig.agents));
     });
 
     test('should apply defaults to partial configuration', () => {
       const partialConfig: Partial<ExtensionConfiguration> = {
-        customAgents: [
+        agents: [
           {
             name: 'test-agent',
             systemPrompt: 'Test prompt',
@@ -627,9 +628,9 @@ suite('Enhanced Configuration Validation Tests', () => {
       };
 
       const configWithDefaults = EnhancedConfigurationValidator.applyDefaults(partialConfig);
-      assert.ok(configWithDefaults.coordinator);
-      assert.strictEqual(configWithDefaults.customAgents.length, 1);
-      assert.strictEqual(configWithDefaults.customAgents[0].name, 'test-agent');
+      assert.ok(configWithDefaults.entryAgent);
+      assert.strictEqual(configWithDefaults.agents.length, 1);
+      assert.strictEqual(configWithDefaults.agents[0].name, 'test-agent');
     });
   });
 

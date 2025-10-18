@@ -49,18 +49,20 @@ suite('Tool Integration Tests', () => {
 
     // Step 3: Mock configuration for coordinator with specific tool permissions
     const mockConfig = {
-      coordinator: {
-        name: 'coordinator' as const,
-        systemPrompt: 'You are a multi-agent coordinator',
-        description: 'Coordinates work between agents',
-        useFor: 'Task orchestration and delegation',
-        delegationPermissions: { type: 'all' as const },
-        toolPermissions: { 
-          type: 'specific' as const, 
-          tools: ['codeSearch', 'fileEdit', 'delegateWork', 'reportOut', 'gitOperation']
+      entryAgent: 'coordinator',
+      agents: [
+        {
+          name: 'coordinator' as const,
+          systemPrompt: 'You are a multi-agent coordinator',
+          description: 'Coordinates work between agents',
+          useFor: 'Task orchestration and delegation',
+          delegationPermissions: { type: 'all' as const },
+          toolPermissions: { 
+            type: 'specific' as const, 
+            tools: ['codeSearch', 'fileEdit', 'delegateWork', 'reportOut', 'gitOperation']
+          }
         }
-      },
-      customAgents: []
+      ]
     };
 
     // Mock the configuration manager
@@ -82,7 +84,7 @@ suite('Tool Integration Tests', () => {
       assert.ok(coordinatorToolNames.includes('gitOperation'), 'Should include gitOperation');
 
       // Step 5: Initialize coordinator agent
-      const coordinatorContext = await agentEngine.initializeAgent(mockConfig.coordinator);
+      const coordinatorContext = await agentEngine.initializeAgent(mockConfig.agents[0]);
       
       // Verify agent context has the filtered tools
       assert.strictEqual(coordinatorContext.availableTools.length, 5, 'Agent context should have 5 filtered tools');
@@ -152,18 +154,20 @@ suite('Tool Integration Tests', () => {
 
     // Mock configuration with specific tool permissions
     const mockConfig = {
-      coordinator: {
-        name: 'coordinator' as const,
-        systemPrompt: 'Test prompt',
-        description: 'Test coordinator',
-        useFor: 'Testing',
-        delegationPermissions: { type: 'all' as const },
-        toolPermissions: { 
-          type: 'specific' as const, 
-          tools: ['allowedTool', 'delegateWork'] 
+      entryAgent: 'coordinator',
+      agents: [
+        {
+          name: 'coordinator' as const,
+          systemPrompt: 'Test prompt',
+          description: 'Test coordinator',
+          useFor: 'Testing',
+          delegationPermissions: { type: 'all' as const },
+          toolPermissions: { 
+            type: 'specific' as const, 
+            tools: ['allowedTool', 'delegateWork'] 
+          }
         }
-      },
-      customAgents: []
+      ]
     };
 
     const originalLoadConfig = configManager.loadConfiguration;
