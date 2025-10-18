@@ -64,6 +64,8 @@ suite('ConfigurationManager Tests', () => {
       // Arrange
       mockWorkspaceConfig.get.withArgs('entryAgent').returns('coordinator');
       mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT]);
+      mockWorkspaceConfig.has.withArgs('entryAgent').returns(true);
+      mockWorkspaceConfig.has.withArgs('agents').returns(true);
 
       // Act
       const config = await configManager.loadConfiguration();
@@ -78,6 +80,8 @@ suite('ConfigurationManager Tests', () => {
       // Arrange
       mockWorkspaceConfig.get.withArgs('entryAgent').returns(undefined);
       mockWorkspaceConfig.get.withArgs('agents').returns([]);
+      mockWorkspaceConfig.has.withArgs('entryAgent').returns(false);
+      mockWorkspaceConfig.has.withArgs('agents').returns(false);
 
       // Act
       const config = await configManager.loadConfiguration();
@@ -90,6 +94,8 @@ suite('ConfigurationManager Tests', () => {
       // Arrange
       mockWorkspaceConfig.get.withArgs('entryAgent').returns('non-existent-agent');
       mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT]);
+      mockWorkspaceConfig.has.withArgs('entryAgent').returns(true);
+      mockWorkspaceConfig.has.withArgs('agents').returns(true);
 
       // Act
       const config = await configManager.loadConfiguration();
@@ -103,6 +109,8 @@ suite('ConfigurationManager Tests', () => {
       // Arrange
       mockWorkspaceConfig.get.withArgs('entryAgent').returns('');
       mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT]);
+      mockWorkspaceConfig.has.withArgs('entryAgent').returns(true);
+      mockWorkspaceConfig.has.withArgs('agents').returns(true);
 
       // Act
       const config = await configManager.loadConfiguration();
@@ -227,6 +235,8 @@ suite('ConfigurationManager Tests', () => {
       // Arrange
       mockWorkspaceConfig.get.withArgs('entryAgent').returns('non-existent');
       mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT]);
+      mockWorkspaceConfig.has.withArgs('entryAgent').returns(true);
+      mockWorkspaceConfig.has.withArgs('agents').returns(true);
 
       // Act
       const entryAgent = await configManager.getEntryAgent();
@@ -239,6 +249,8 @@ suite('ConfigurationManager Tests', () => {
       // Arrange
       mockWorkspaceConfig.get.withArgs('entryAgent').returns('');
       mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT]);
+      mockWorkspaceConfig.has.withArgs('entryAgent').returns(true);
+      mockWorkspaceConfig.has.withArgs('agents').returns(true);
 
       // Act
       const entryAgent = await configManager.getEntryAgent();
@@ -253,6 +265,8 @@ suite('ConfigurationManager Tests', () => {
       // Arrange
       mockWorkspaceConfig.get.withArgs('entryAgent').returns('coordinator');
       mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT, testAgentConfig]);
+      mockWorkspaceConfig.has.withArgs('entryAgent').returns(true);
+      mockWorkspaceConfig.has.withArgs('agents').returns(true);
 
       // Act
       const agent = await configManager.getAgentConfiguration('test-agent');
@@ -265,6 +279,8 @@ suite('ConfigurationManager Tests', () => {
       // Arrange
       mockWorkspaceConfig.get.withArgs('entryAgent').returns('coordinator');
       mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT]);
+      mockWorkspaceConfig.has.withArgs('entryAgent').returns(true);
+      mockWorkspaceConfig.has.withArgs('agents').returns(true);
 
       // Act
       const agent = await configManager.getAgentConfiguration('non-existent');
@@ -300,16 +316,21 @@ suite('ConfigurationManager Tests', () => {
       // Arrange
       mockWorkspaceConfig.get.withArgs('entryAgent').returns('coordinator');
       mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT]);
+      mockWorkspaceConfig.has.withArgs('entryAgent').returns(true);
+      mockWorkspaceConfig.has.withArgs('agents').returns(true);
       mockWorkspaceConfig.update.resolves();
 
+      // Create a new agent config with the correct name
+      const newAgentConfig = { ...testAgentConfig, name: 'new-agent' };
+
       // Act
-      await configManager.updateAgentConfiguration('new-agent', testAgentConfig);
+      await configManager.updateAgentConfiguration('new-agent', newAgentConfig);
 
       // Assert
       assert.ok(mockWorkspaceConfig.update.calledWith('agents'));
       const savedAgents = mockWorkspaceConfig.update.getCall(1).args[1] as AgentConfiguration[];
       assert.strictEqual(savedAgents.length, 2);
-      assert.ok(savedAgents.some(a => a.name === 'test-agent'));
+      assert.ok(savedAgents.some(a => a.name === 'new-agent'));
     });
   });
 
@@ -318,6 +339,8 @@ suite('ConfigurationManager Tests', () => {
       // Arrange
       mockWorkspaceConfig.get.withArgs('entryAgent').returns('coordinator');
       mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT, testAgentConfig]);
+      mockWorkspaceConfig.has.withArgs('entryAgent').returns(true);
+      mockWorkspaceConfig.has.withArgs('agents').returns(true);
       mockWorkspaceConfig.update.resolves();
 
       // Act
@@ -347,6 +370,8 @@ suite('ConfigurationManager Tests', () => {
       // Arrange
       mockWorkspaceConfig.get.withArgs('entryAgent').returns('test-agent');
       mockWorkspaceConfig.get.withArgs('agents').returns([testAgentConfig]);
+      mockWorkspaceConfig.has.withArgs('entryAgent').returns(true);
+      mockWorkspaceConfig.has.withArgs('agents').returns(true);
       mockWorkspaceConfig.update.resolves();
 
       // Act
@@ -389,6 +414,8 @@ suite('ConfigurationManager Tests', () => {
       // Arrange
       mockWorkspaceConfig.get.withArgs('entryAgent').returns('coordinator');
       mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT, testAgentConfig]);
+      mockWorkspaceConfig.has.withArgs('entryAgent').returns(true);
+      mockWorkspaceConfig.has.withArgs('agents').returns(true);
       mockWorkspaceConfig.update.resolves();
 
       // Act
@@ -443,6 +470,8 @@ suite('ConfigurationManager Tests', () => {
       // Arrange
       mockWorkspaceConfig.get.withArgs('entryAgent').returns('non-existent');
       mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT]);
+      mockWorkspaceConfig.has.withArgs('entryAgent').returns(true);
+      mockWorkspaceConfig.has.withArgs('agents').returns(true);
       mockWorkspaceConfig.update.resolves();
 
       // Act

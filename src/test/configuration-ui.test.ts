@@ -63,10 +63,11 @@ suite('Configuration UI Integration Tests', () => {
   suite('Settings UI Schema Validation', () => {
     test('should validate entry agent field constraints', async () => {
       // Test valid entry agent name
+      const testAgent = { ...DEFAULT_COORDINATOR_AGENT, name: 'valid-agent-123' };
       mockWorkspaceConfig.get.withArgs('entryAgent').returns('valid-agent-123');
-      mockWorkspaceConfig.get.withArgs('agents').returns([
-        { ...DEFAULT_COORDINATOR_AGENT, name: 'valid-agent-123' }
-      ]);
+      mockWorkspaceConfig.get.withArgs('agents').returns([testAgent]);
+      mockWorkspaceConfig.has.withArgs('entryAgent').returns(true);
+      mockWorkspaceConfig.has.withArgs('agents').returns(true);
 
       const config = await configManager.loadConfiguration();
       assert.strictEqual(config.entryAgent, 'valid-agent-123');
@@ -114,6 +115,8 @@ suite('Configuration UI Integration Tests', () => {
 
       mockWorkspaceConfig.get.withArgs('entryAgent').returns('valid-agent');
       mockWorkspaceConfig.get.withArgs('agents').returns([validAgent]);
+      mockWorkspaceConfig.has.withArgs('entryAgent').returns(true);
+      mockWorkspaceConfig.has.withArgs('agents').returns(true);
 
       const config = await configManager.loadConfiguration();
       assert.strictEqual(config.agents.length, 1);
@@ -173,6 +176,8 @@ suite('Configuration UI Integration Tests', () => {
       const agents = [DEFAULT_COORDINATOR_AGENT, testAgentConfig];
       mockWorkspaceConfig.get.withArgs('entryAgent').returns('coordinator');
       mockWorkspaceConfig.get.withArgs('agents').returns(agents);
+      mockWorkspaceConfig.has.withArgs('entryAgent').returns(true);
+      mockWorkspaceConfig.has.withArgs('agents').returns(true);
 
       const config = await configManager.loadConfiguration();
       const agentNames = config.agents.map(a => a.name);
@@ -193,6 +198,8 @@ suite('Configuration UI Integration Tests', () => {
     test('should handle entry agent update through settings', async () => {
       mockWorkspaceConfig.get.withArgs('entryAgent').returns('coordinator');
       mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT, testAgentConfig]);
+      mockWorkspaceConfig.has.withArgs('entryAgent').returns(true);
+      mockWorkspaceConfig.has.withArgs('agents').returns(true);
       mockWorkspaceConfig.update.resolves();
 
       await configManager.updateEntryAgent('test-agent');
@@ -245,12 +252,17 @@ suite('Configuration UI Integration Tests', () => {
     test('should support removing agent through settings', async () => {
       mockWorkspaceConfig.get.withArgs('entryAgent').returns('coordinator');
       mockWorkspaceConfig.get.withArgs('agents').returns([DEFAULT_COORDINATOR_AGENT, testAgentConfig]);
+      mockWorkspaceConfig.has.withArgs('entryAgent').returns(true);
+      mockWorkspaceConfig.has.withArgs('agents').returns(true);
       mockWorkspaceConfig.update.resolves();
 
       await configManager.removeAgentConfiguration('test-agent');
 
       assert.ok(mockWorkspaceConfig.update.calledWith('agents'));
-      const savedAgents = mockWorkspaceConfig.update.getCall(1).args[1] as AgentConfiguration[];
+      // Find the call that updates agents (might not be the second call)
+      const agentsUpdateCall = mockWorkspaceConfig.update.getCalls().find((call: any) => call.args[0] === 'agents');
+      assert.ok(agentsUpdateCall, 'Should have called update with agents');
+      const savedAgents = agentsUpdateCall.args[1] as AgentConfiguration[];
       assert.strictEqual(savedAgents.length, 1);
       assert.ok(!savedAgents.some(a => a.name === 'test-agent'));
     });
@@ -279,6 +291,8 @@ suite('Configuration UI Integration Tests', () => {
       const agents = [agentWithAllPermissions, agentWithNoPermissions, agentWithSpecificPermissions];
       mockWorkspaceConfig.get.withArgs('entryAgent').returns('all-permissions');
       mockWorkspaceConfig.get.withArgs('agents').returns(agents);
+      mockWorkspaceConfig.has.withArgs('entryAgent').returns(true);
+      mockWorkspaceConfig.has.withArgs('agents').returns(true);
 
       const config = await configManager.loadConfiguration();
       assert.strictEqual(config.agents.length, 3);
@@ -350,6 +364,8 @@ suite('Configuration UI Integration Tests', () => {
       const agents = [agentWithAllTools, agentWithNoTools, agentWithSpecificTools];
       mockWorkspaceConfig.get.withArgs('entryAgent').returns('all-tools');
       mockWorkspaceConfig.get.withArgs('agents').returns(agents);
+      mockWorkspaceConfig.has.withArgs('entryAgent').returns(true);
+      mockWorkspaceConfig.has.withArgs('agents').returns(true);
 
       const config = await configManager.loadConfiguration();
       assert.strictEqual(config.agents.length, 3);
@@ -501,6 +517,8 @@ suite('Configuration UI Integration Tests', () => {
         DEFAULT_COORDINATOR_AGENT,
         { ...testAgentConfig, name: 'updated-agent' }
       ]);
+      mockWorkspaceConfig.has.withArgs('entryAgent').returns(true);
+      mockWorkspaceConfig.has.withArgs('agents').returns(true);
 
       const config = await configManager.loadConfiguration();
       assert.strictEqual(config.entryAgent, 'updated-agent');

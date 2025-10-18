@@ -128,8 +128,8 @@ export class EnhancedConfigurationValidator {
     const errors: string[] = [];
 
     if (!entryAgent) {
-      if (options.allowDefaults && agents && agents.length > 0) {
-        console.log(`${context}: Using first agent as default entry agent`);
+      if (options.allowDefaults) {
+        console.log(`${context}: Using default entry agent configuration`);
         return { isValid: true, errors: [] };
       } else {
         errors.push(`${context}: Entry agent setting is required`);
@@ -149,10 +149,14 @@ export class EnhancedConfigurationValidator {
     }
 
     // Validate that entry agent exists in agents array
-    if (agents && Array.isArray(agents)) {
+    if (agents && Array.isArray(agents) && agents.length > 0) {
       const agentExists = agents.some((agent: any) => agent?.name === trimmedEntryAgent);
       if (!agentExists) {
-        errors.push(`${context}: Entry agent "${trimmedEntryAgent}" does not exist in the agents configuration`);
+        if (options.allowDefaults) {
+          console.log(`${context}: Entry agent "${trimmedEntryAgent}" not found, will use defaults`);
+        } else {
+          errors.push(`${context}: Entry agent "${trimmedEntryAgent}" does not exist in the agents configuration`);
+        }
       }
     }
 
@@ -185,8 +189,13 @@ export class EnhancedConfigurationValidator {
     }
 
     if (agents.length === 0) {
-      errors.push(`${context}: At least one agent must be configured`);
-      return { isValid: false, errors };
+      if (options.allowDefaults) {
+        console.log(`${context}: Using default agents configuration for empty array`);
+        return { isValid: true, errors: [] };
+      } else {
+        errors.push(`${context}: At least one agent must be configured`);
+        return { isValid: false, errors };
+      }
     }
 
     // Validate agent count limits
@@ -711,6 +720,13 @@ export class EnhancedConfigurationValidator {
     if (!Array.isArray(migratedConfig.agents)) {
       migratedConfig.agents = DEFAULT_EXTENSION_CONFIG.agents;
       changes.push('Initialized agents array with default configuration');
+      migrated = true;
+    }
+
+    // Ensure agents array is not empty
+    if (Array.isArray(migratedConfig.agents) && migratedConfig.agents.length === 0) {
+      migratedConfig.agents = DEFAULT_EXTENSION_CONFIG.agents;
+      changes.push('Populated empty agents array with default configuration');
       migrated = true;
     }
 

@@ -38,18 +38,16 @@ suite('Comprehensive Core Component Tests', () => {
       assert.strictEqual(validation.errors.length, 0);
     });
 
-    test('should reject configuration with invalid coordinator name', () => {
-      const invalidConfig = {
-        coordinator: {
+    test('should accept configuration with valid agent name', () => {
+      const validConfig = {
+        agents: [{
           ...DEFAULT_COORDINATOR_CONFIG,
-          name: 'wrong-name' as any
-        },
-        customAgents: []
+          name: 'valid-agent-name'
+        }]
       } as any;
 
-      const validation = ConfigurationValidator.validateExtensionConfiguration(invalidConfig);
-      assert.strictEqual(validation.isValid, false);
-      assert.ok(validation.errors.some(error => error.includes('Coordinator name must be "coordinator"')));
+      const validation = ConfigurationValidator.validateExtensionConfiguration(validConfig);
+      assert.strictEqual(validation.isValid, true);
     });
 
     test('should reject configuration with duplicate agent names', () => {
@@ -293,15 +291,14 @@ suite('Comprehensive Core Component Tests', () => {
   suite('Configuration Transformation and Normalization', () => {
     test('should normalize configuration with missing optional fields', () => {
       const partialConfig = {
-        coordinator: {
+        agents: [{
           name: 'coordinator',
           systemPrompt: 'Test prompt',
           description: 'Test description',
           useFor: 'Test use',
           delegationPermissions: { type: 'all' },
           toolPermissions: { type: 'all' }
-        },
-        customAgents: []
+        }]
       };
 
       const validation = ConfigurationValidator.validateExtensionConfiguration(partialConfig);
@@ -313,9 +310,9 @@ suite('Comprehensive Core Component Tests', () => {
         null,
         undefined,
         {},
-        { coordinator: null },
-        { coordinator: DEFAULT_COORDINATOR_CONFIG, customAgents: null },
-        { coordinator: DEFAULT_COORDINATOR_CONFIG, customAgents: undefined }
+        { agents: null },
+        { agents: [DEFAULT_COORDINATOR_CONFIG] },
+        { agents: undefined }
       ];
 
       testCases.forEach((testCase, index) => {
@@ -356,20 +353,19 @@ suite('Comprehensive Core Component Tests', () => {
     test('should provide specific error messages for different validation failures', () => {
       const testCases = [
         {
-          config: { coordinator: null, customAgents: [] },
-          expectedErrorKeywords: ['coordinator', 'required']
+          config: { agents: null },
+          expectedErrorKeywords: ['agents', 'array']
         },
         {
           config: {
-            coordinator: { ...DEFAULT_COORDINATOR_CONFIG, name: 'wrong' },
-            customAgents: []
+            agents: [{ ...DEFAULT_COORDINATOR_CONFIG, name: 'invalid name with spaces' }]
           },
-          expectedErrorKeywords: ['coordinator', 'name']
+          expectedErrorKeywords: ['name', 'letters']
         },
         {
           config: {
-            coordinator: DEFAULT_COORDINATOR_CONFIG,
-            customAgents: [
+            agents: [
+              DEFAULT_COORDINATOR_CONFIG,
               { name: '', systemPrompt: '', description: '', useFor: '', delegationPermissions: { type: 'none' }, toolPermissions: { type: 'all' } }
             ]
           },
@@ -392,11 +388,10 @@ suite('Comprehensive Core Component Tests', () => {
 
     test('should provide helpful suggestions in error messages', () => {
       const invalidConfig = {
-        coordinator: {
+        agents: [{
           ...DEFAULT_COORDINATOR_CONFIG,
           delegationPermissions: { type: 'specific' } // Missing agents array
-        },
-        customAgents: []
+        }]
       };
 
       const validation = ConfigurationValidator.validateExtensionConfiguration(invalidConfig as any);

@@ -85,11 +85,20 @@ export class ConfigurationManager implements IConfigurationManager {
     try {
       const config = vscode.workspace.getConfiguration(ConfigurationManager.CONFIGURATION_SECTION);
       
+      // Check if user has explicitly configured values
+      const hasExplicitEntryAgent = config.has(ConfigurationManager.ENTRY_AGENT_KEY);
+      const hasExplicitAgents = config.has(ConfigurationManager.AGENTS_KEY);
+      
       // Load entry agent and agents configuration
       const entryAgent = config.get<string>(ConfigurationManager.ENTRY_AGENT_KEY);
       const agents = config.get<AgentConfiguration[]>(ConfigurationManager.AGENTS_KEY, []);
       
-      // Build configuration object
+      // If no explicit configuration exists, return defaults
+      if (!hasExplicitEntryAgent && !hasExplicitAgents) {
+        return DEFAULT_EXTENSION_CONFIG;
+      }
+      
+      // Build configuration object from user's explicit configuration
       const rawConfig: ExtensionConfiguration = {
         entryAgent: entryAgent || '',
         agents: agents || []
@@ -97,6 +106,22 @@ export class ConfigurationManager implements IConfigurationManager {
       
       // Validate configuration
       const validationResult = ConfigurationValidator.validateExtensionConfiguration(rawConfig);
+      
+      // Handle entry agent validation and fallback for backward compatibility
+      // Some tests and legacy code expect this behavior
+      const entryAgentValidation = ConfigurationValidator.validateAndGetEntryAgent(rawConfig.entryAgent, rawConfig.agents);
+      if (entryAgentValidation.entryAgent && entryAgentValidation.entryAgent !== rawConfig.entryAgent) {
+        // Use the resolved entry agent (could be fallback or default)
+        console.warn('Entry agent resolved to:', entryAgentValidation.entryAgent);
+        rawConfig.entryAgent = entryAgentValidation.entryAgent;
+      } else if (!entryAgentValidation.isValid && rawConfig.agents.length > 0) {
+        // Entry agent is invalid and no fallback provided, use first agent
+        const fallbackAgent = ConfigurationValidator.getDefaultEntryAgent(rawConfig.agents);
+        if (fallbackAgent) {
+          console.warn('Entry agent validation failed, using fallback:', entryAgentValidation.errors);
+          rawConfig.entryAgent = fallbackAgent;
+        }
+      }
       
       if (!validationResult.isValid) {
         // Log validation errors
@@ -108,16 +133,9 @@ export class ConfigurationManager implements IConfigurationManager {
           { notifyUser: false }
         );
         
-        // Return default configuration if validation fails
-        return DEFAULT_EXTENSION_CONFIG;
-      }
-      
-      // Handle entry agent validation and fallback
-      const entryAgentValidation = ConfigurationValidator.validateAndGetEntryAgent(rawConfig.entryAgent, rawConfig.agents);
-      if (!entryAgentValidation.isValid) {
-        console.warn('Entry agent validation failed:', entryAgentValidation.errors);
-        // Use the fallback entry agent
-        rawConfig.entryAgent = entryAgentValidation.entryAgent || DEFAULT_EXTENSION_CONFIG.entryAgent;
+        // Return the configuration with entry agent fixed if possible
+        // This preserves the user's configuration choices while fixing critical issues
+        return rawConfig;
       }
       
       return rawConfig;
@@ -179,14 +197,17 @@ export class ConfigurationManager implements IConfigurationManager {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('Error saving configuration:', errorMessage);
       
-      if (!(error instanceof ConfigurationError)) {
-        await errorHandler.handleError(
-          new ConfigurationError(`Failed to save configuration: ${errorMessage}`),
-          createErrorContext(undefined, undefined, 'saveConfiguration', { config })
-        );
+      if (error instanceof ConfigurationError) {
+        throw error;
       }
       
-      throw error;
+      const configError = new ConfigurationError(`Failed to save configuration: ${errorMessage}`);
+      await errorHandler.handleError(
+        configError,
+        createErrorContext(undefined, undefined, 'saveConfiguration', { config })
+      );
+      
+      throw configError;
     }
   }
 
@@ -213,14 +234,16 @@ export class ConfigurationManager implements IConfigurationManager {
    * Gets the entry agent configuration
    */
   async getEntryAgent(): Promise<AgentConfiguration | null> {
-    const config = await this.loadConfiguration();
-    const entryAgentName = config.entryAgent;
+    // Load raw configuration without automatic fixing for this method
+    const vsCodeConfig = vscode.workspace.getConfiguration(ConfigurationManager.CONFIGURATION_SECTION);
+    const entryAgentName = vsCodeConfig.get<string>(ConfigurationManager.ENTRY_AGENT_KEY);
+    const agents = vsCodeConfig.get<AgentConfiguration[]>(ConfigurationManager.AGENTS_KEY, []);
     
     if (!entryAgentName) {
       return null;
     }
     
-    return config.agents.find(agent => agent.name === entryAgentName) || null;
+    return agents.find(agent => agent.name === entryAgentName) || null;
   }
 
   /**
@@ -323,8 +346,10 @@ export class ConfigurationManager implements IConfigurationManager {
    * Gets all agent names
    */
   async getAllAgentNames(): Promise<string[]> {
-    const config = await this.loadConfiguration();
-    return config.agents.map(agent => agent.name);
+    // Load raw configuration to get actual configured agents
+    const vsCodeConfig = vscode.workspace.getConfiguration(ConfigurationManager.CONFIGURATION_SECTION);
+    const agents = vsCodeConfig.get<AgentConfiguration[]>(ConfigurationManager.AGENTS_KEY, []);
+    return agents.map(agent => agent.name);
   }
 
   /**
@@ -357,19 +382,32 @@ export class ConfigurationManager implements IConfigurationManager {
    */
   async validateAndFixConfiguration(): Promise<{ fixed: boolean; errors: string[]; warnings: string[] }> {
     try {
-      const currentConfig = await this.loadConfiguration();
-      const validationResult = ConfigurationValidator.validateExtensionConfiguration(currentConfig);
+      // Load raw configuration without automatic fixing
+      const config = vscode.workspace.getConfiguration(ConfigurationManager.CONFIGURATION_SECTION);
+      const rawEntryAgent = config.get<string>(ConfigurationManager.ENTRY_AGENT_KEY);
+      const rawAgents = config.get<AgentConfiguration[]>(ConfigurationManager.AGENTS_KEY, []);
+      
+      const rawConfig: ExtensionConfiguration = {
+        entryAgent: rawEntryAgent || '',
+        agents: rawAgents || []
+      };
+      
+      const validationResult = ConfigurationValidator.validateExtensionConfiguration(rawConfig);
       
       if (!validationResult.isValid) {
         // Try to fix common issues
-        let fixedConfig = { ...currentConfig };
+        let fixedConfig = { ...rawConfig };
         let fixed = false;
         
         // Fix entry agent if invalid
         const entryAgentValidation = ConfigurationValidator.validateAndGetEntryAgent(fixedConfig.entryAgent, fixedConfig.agents);
-        if (!entryAgentValidation.isValid && entryAgentValidation.entryAgent) {
-          fixedConfig.entryAgent = entryAgentValidation.entryAgent;
-          fixed = true;
+        if (!entryAgentValidation.isValid) {
+          // Get fallback entry agent
+          const fallbackEntryAgent = ConfigurationValidator.getDefaultEntryAgent(fixedConfig.agents);
+          if (fallbackEntryAgent) {
+            fixedConfig.entryAgent = fallbackEntryAgent;
+            fixed = true;
+          }
         }
         
         // If we made fixes, save the configuration

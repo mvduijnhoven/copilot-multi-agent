@@ -4,7 +4,7 @@
 
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import { beforeEach, afterEach, describe, it } from 'mocha';
+// Removed mocha imports - using VS Code test framework
 import * as sinon from 'sinon';
 
 // Import compatibility services
@@ -16,12 +16,12 @@ import {
 } from '../services/compatibility-checker';
 import { activate, deactivate, getExtensionState } from '../extension';
 
-describe('Extension Compatibility and Integration', () => {
+suite('Extension Compatibility and Integration', () => {
   let sandbox: sinon.SinonSandbox;
   let mockContext: vscode.ExtensionContext;
   let mockWorkspaceConfig: sinon.SinonStubbedInstance<vscode.WorkspaceConfiguration>;
 
-  beforeEach(() => {
+  setup(() => {
     sandbox = sinon.createSandbox();
     
     // Create mock extension context
@@ -89,7 +89,7 @@ describe('Extension Compatibility and Integration', () => {
     mockWorkspaceConfig.get.withArgs('showActivationMessage', false).returns(false);
   });
 
-  afterEach(async () => {
+  teardown(async () => {
     try {
       await deactivate();
     } catch (error) {
@@ -98,8 +98,8 @@ describe('Extension Compatibility and Integration', () => {
     sandbox.restore();
   });
 
-  describe('CompatibilityChecker', () => {
-    it('should check VS Code version compatibility', async () => {
+  suite('CompatibilityChecker', () => {
+    test('should check VS Code version compatibility', async () => {
       // Act - Use real VS Code version since we can't stub it
       const result = await CompatibilityChecker.checkCompatibility();
 
@@ -112,7 +112,7 @@ describe('Extension Compatibility and Integration', () => {
       assert.ok(Array.isArray(result.recommendations), 'Should provide recommendations array');
     });
 
-    it('should detect incompatible VS Code version', async () => {
+    test('should detect incompatible VS Code version', async () => {
       // Test the version parsing logic directly since we can't mock VS Code version
       const testChecker = CompatibilityChecker as any;
       const oldVersion = testChecker.parseVersion('1.100.0');
@@ -128,7 +128,7 @@ describe('Extension Compatibility and Integration', () => {
       assert.strictEqual(typeof result.isCompatible, 'boolean', 'Should indicate compatibility status');
     });
 
-    it('should check feature availability', async () => {
+    test('should check feature availability', async () => {
       // Act - Use real VS Code APIs since we can't stub them
       const result = await CompatibilityChecker.checkCompatibility();
 
@@ -144,7 +144,7 @@ describe('Extension Compatibility and Integration', () => {
       assert.strictEqual(result.requiredFeatures.commandAPI, true, 'Command API should be available');
     });
 
-    it('should detect missing chat API', async () => {
+    test('should detect missing chat API', async () => {
       // Test the API detection logic directly
       const testChecker = CompatibilityChecker as any;
       const hasAPI = testChecker.isAPIAvailable('vscode.chat.createChatParticipant');
@@ -158,7 +158,7 @@ describe('Extension Compatibility and Integration', () => {
       assert.strictEqual(typeof result.requiredFeatures.chatParticipantAPI, 'boolean', 'Should check chat API');
     });
 
-    it('should check extension compatibility', async () => {
+    test('should check extension compatibility', async () => {
       // Mock extensions
       const mockExtensions = [
         {
@@ -187,7 +187,7 @@ describe('Extension Compatibility and Integration', () => {
         'Should not recommend installing already active extensions');
     });
 
-    it('should recommend missing extensions', async () => {
+    test('should recommend missing extensions', async () => {
       // Mock no extensions
       sandbox.stub(vscode.extensions, 'all').value([]);
       sandbox.stub(vscode.extensions, 'getExtension').returns(undefined);
@@ -200,7 +200,7 @@ describe('Extension Compatibility and Integration', () => {
         'Should recommend GitHub Copilot extension');
     });
 
-    it('should perform runtime compatibility check', async () => {
+    test('should perform runtime compatibility check', async () => {
       // Mock working APIs
       sandbox.stub(vscode.chat, 'createChatParticipant').returns({} as any);
 
@@ -214,7 +214,7 @@ describe('Extension Compatibility and Integration', () => {
       assert.ok(Array.isArray(result.issues), 'Should provide issues array');
     });
 
-    it('should detect runtime API failures', async () => {
+    test('should detect runtime API failures', async () => {
       // Act - Test runtime check with real APIs
       const result = await CompatibilityChecker.performRuntimeCheck();
 
@@ -228,7 +228,7 @@ describe('Extension Compatibility and Integration', () => {
       assert.strictEqual(result.canProceed, true, 'Should be able to proceed in VS Code environment');
     });
 
-    it('should create compatibility report', async () => {
+    test('should create compatibility report', async () => {
       // Act
       const report = await CompatibilityChecker.createCompatibilityReport();
 
@@ -240,14 +240,14 @@ describe('Extension Compatibility and Integration', () => {
     });
   });
 
-  describe('GracefulDegradationManager', () => {
+  suite('GracefulDegradationManager', () => {
     let degradationManager: GracefulDegradationManager;
 
-    beforeEach(async () => {
+    setup(async () => {
       degradationManager = new GracefulDegradationManager();
     });
 
-    it('should initialize with compatibility check', async () => {
+    test('should initialize with compatibility check', async () => {
       // Act
       await degradationManager.initialize();
 
@@ -260,7 +260,7 @@ describe('Extension Compatibility and Integration', () => {
         'Should track compatibility issues');
     });
 
-    it('should check feature availability', async () => {
+    test('should check feature availability', async () => {
       // Arrange
       await degradationManager.initialize();
 
@@ -270,7 +270,7 @@ describe('Extension Compatibility and Integration', () => {
       assert.strictEqual(typeof degradationManager.isFeatureAvailable('delegation'), 'boolean');
     });
 
-    it('should provide fallback behaviors', async () => {
+    test('should provide fallback behaviors', async () => {
       // Arrange
       await degradationManager.initialize();
 
@@ -287,7 +287,7 @@ describe('Extension Compatibility and Integration', () => {
       }
     });
 
-    it('should attempt to re-enable features', async () => {
+    test('should attempt to re-enable features', async () => {
       // Arrange
       await degradationManager.initialize();
       
@@ -314,7 +314,7 @@ describe('Extension Compatibility and Integration', () => {
       assert.strictEqual(typeof result, 'boolean', 'Should return enable result');
     });
 
-    it('should generate status message', async () => {
+    test('should generate status message', async () => {
       // Arrange
       await degradationManager.initialize();
 
@@ -327,8 +327,8 @@ describe('Extension Compatibility and Integration', () => {
     });
   });
 
-  describe('Extension Integration with Compatibility', () => {
-    it('should activate with compatibility check', async () => {
+  suite('Extension Integration with Compatibility', () => {
+    test('should activate with compatibility check', async () => {
       // Act - Use real VS Code environment
       await activate(mockContext);
 
@@ -340,7 +340,7 @@ describe('Extension Compatibility and Integration', () => {
       assert.strictEqual(state.isInitialized, true, 'Should be initialized');
     });
 
-    it('should handle incompatible environment gracefully', async () => {
+    test('should handle incompatible environment gracefully', async () => {
       // Mock chat participant failure
       sandbox.stub(vscode.chat, 'createChatParticipant').throws(new Error('Chat API not available'));
 
@@ -357,7 +357,7 @@ describe('Extension Compatibility and Integration', () => {
       assert.ok(showWarningStub.called, 'Should show warning about degraded functionality');
     });
 
-    it('should handle user cancelling activation due to compatibility', async () => {
+    test('should handle user cancelling activation due to compatibility', async () => {
       // This test is not applicable in a real VS Code environment where compatibility is good
       // Instead, test that activation succeeds in a compatible environment
       
@@ -370,7 +370,7 @@ describe('Extension Compatibility and Integration', () => {
       assert.strictEqual(state.isInitialized, true, 'Should be initialized');
     });
 
-    it('should register compatibility commands', async () => {
+    test('should register compatibility commands', async () => {
       // Act
       await activate(mockContext);
 
@@ -386,7 +386,7 @@ describe('Extension Compatibility and Integration', () => {
         'Should register compatibility mode toggle command');
     });
 
-    it('should handle chat participant registration failure gracefully', async () => {
+    test('should handle chat participant registration failure gracefully', async () => {
       // Mock environment where chat participant fails to register
       sandbox.stub(vscode.chat, 'createChatParticipant').throws(new Error('Registration failed'));
 
@@ -403,7 +403,7 @@ describe('Extension Compatibility and Integration', () => {
       assert.ok(showWarningStub.called, 'Should show warning message');
     });
 
-    it('should monitor compatibility and re-enable features', async () => {
+    test('should monitor compatibility and re-enable features', async () => {
       // Act
       await activate(mockContext);
 
@@ -419,13 +419,13 @@ describe('Extension Compatibility and Integration', () => {
     });
   });
 
-  describe('Compatibility Commands', () => {
-    beforeEach(async () => {
+  suite('Compatibility Commands', () => {
+    setup(async () => {
       // Set up activated extension
       await activate(mockContext);
     });
 
-    it('should handle show compatibility report command', async () => {
+    test('should handle show compatibility report command', async () => {
       // Arrange
       const registerCommandStub = vscode.commands.registerCommand as sinon.SinonStub;
       const reportCommandCall = registerCommandStub.getCalls()
@@ -445,7 +445,7 @@ describe('Extension Compatibility and Integration', () => {
       assert.ok(showDocStub.calledOnce, 'Should show text document');
     });
 
-    it('should handle check compatibility command', async () => {
+    test('should handle check compatibility command', async () => {
       // Arrange
       const registerCommandStub = vscode.commands.registerCommand as sinon.SinonStub;
       const checkCommandCall = registerCommandStub.getCalls()
@@ -465,7 +465,7 @@ describe('Extension Compatibility and Integration', () => {
       assert.ok(messageCall.args[0].includes('Compatibility Status'), 'Should show status message');
     });
 
-    it('should handle enhanced status command with compatibility info', async () => {
+    test('should handle enhanced status command with compatibility info', async () => {
       // Arrange
       const registerCommandStub = vscode.commands.registerCommand as sinon.SinonStub;
       const statusCommandCall = registerCommandStub.getCalls()

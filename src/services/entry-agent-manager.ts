@@ -397,6 +397,18 @@ export class EntryAgentManager implements IEntryAgentManager {
     errors: string[];
     warnings: string[];
   }> {
+    if (!configuration) {
+      return {
+        configured: null,
+        resolved: null,
+        isValid: false,
+        usedFallback: false,
+        availableAgents: [],
+        errors: ['Configuration is null'],
+        warnings: []
+      };
+    }
+
     const resolution = await this.resolveEntryAgent(configuration);
     
     return {

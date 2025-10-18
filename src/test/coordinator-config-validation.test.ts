@@ -68,11 +68,8 @@ suite('Coordinator Configuration Validation', () => {
 
     const result = await validateConfiguration(configWithWrongName, 'test');
     
-    // Should either fix the name or be invalid
-    if (result.isValid) {
-      assert.ok(result.config.agents.some(agent => agent.name === 'coordinator'), 'Should have a coordinator agent');
-    } else {
-      assert.ok(result.errors.some(error => error.includes('agent') || error.includes('name')), 'Should have error about agent name');
-    }
+    // Should be valid since agent names are flexible now
+    assert.strictEqual(result.isValid, true, 'Configuration with valid agent should be accepted');
+    assert.ok(result.config.agents.some(agent => agent.name === 'wrong-name'), 'Should preserve the agent name');
   });
 });

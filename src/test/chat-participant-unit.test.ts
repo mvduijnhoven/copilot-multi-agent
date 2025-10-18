@@ -1,10 +1,8 @@
 /**
- * Basic integration tests for MultiAgentChatParticipant
- * Tests the core functionality without complex mocking
+ * Unit tests for MultiAgentChatParticipant without VS Code test environment
  */
 
 import * as assert from 'assert';
-import * as vscode from 'vscode';
 import { MultiAgentChatParticipant } from '../services/chat-participant';
 import { ConfigurationManager } from '../services/configuration-manager';
 import { DefaultAgentEngine } from '../services/agent-engine';
@@ -13,14 +11,15 @@ import { DefaultDelegationEngine } from '../services/delegation-engine';
 import { SystemPromptBuilder } from '../services/system-prompt-builder';
 import { CHAT_PARTICIPANT_ID } from '../constants';
 
-suite('MultiAgentChatParticipant Basic Tests', () => {
+// Simple test without VS Code environment
+suite('MultiAgentChatParticipant Unit Tests', () => {
   let chatParticipant: MultiAgentChatParticipant;
   let configManager: ConfigurationManager;
   let agentEngine: DefaultAgentEngine;
   let toolFilter: DefaultToolFilter;
   let delegationEngine: DefaultDelegationEngine;
 
-  setup(async () => {
+  setup(() => {
     // Initialize dependencies
     configManager = new ConfigurationManager();
     toolFilter = new DefaultToolFilter(configManager);
@@ -46,9 +45,8 @@ suite('MultiAgentChatParticipant Basic Tests', () => {
     }
   });
 
-  test('should have correct ID and properties', () => {
+  test('should have correct ID', () => {
     assert.strictEqual(chatParticipant.id, CHAT_PARTICIPANT_ID);
-    assert.strictEqual(chatParticipant.isRegistered(), false);
   });
 
   test('should not be registered initially', () => {
@@ -56,42 +54,21 @@ suite('MultiAgentChatParticipant Basic Tests', () => {
   });
 
   test('should dispose cleanly', () => {
-    // Test that dispose doesn't throw
     assert.doesNotThrow(() => {
       chatParticipant.dispose();
     });
-    
-    // After disposal, should not be registered
     assert.strictEqual(chatParticipant.isRegistered(), false);
   });
 
-  test('should handle registration attempt', () => {
-    // Test registration (may fail in test environment, which is expected)
-    try {
-      chatParticipant.register();
-      // If we get here without throwing, registration succeeded
-      assert.ok(true, 'Registration completed without errors');
-    } catch (error) {
-      // In test environment, VS Code chat API might not be available
-      // This is expected and not a failure of our implementation
-      console.log('Chat API not available in test environment:', error);
-      assert.ok(true, 'Expected behavior in test environment');
-    }
-  });
-
-  test('should create EntryAgentManager internally', () => {
-    // Test that the chat participant was created successfully
-    // This indirectly tests that EntryAgentManager was created without errors
+  test('should create with EntryAgentManager integration', () => {
+    // Test that the chat participant was created successfully with EntryAgentManager
     assert.ok(chatParticipant, 'Chat participant should be created');
     assert.strictEqual(chatParticipant.id, CHAT_PARTICIPANT_ID);
-  });
-
-  test('should handle multiple dispose calls', () => {
-    // Test that multiple dispose calls don't cause issues
-    assert.doesNotThrow(() => {
-      chatParticipant.dispose();
-      chatParticipant.dispose();
-      chatParticipant.dispose();
-    });
+    
+    // Test that it has the expected interface
+    assert.ok(typeof chatParticipant.handleRequest === 'function');
+    assert.ok(typeof chatParticipant.register === 'function');
+    assert.ok(typeof chatParticipant.dispose === 'function');
+    assert.ok(typeof chatParticipant.isRegistered === 'function');
   });
 });

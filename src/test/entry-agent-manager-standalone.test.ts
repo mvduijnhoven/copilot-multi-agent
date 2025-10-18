@@ -159,10 +159,10 @@ class MockEntryAgentManager {
 }
 
 // Test suite
-describe('EntryAgentManager Standalone Tests', () => {
+suite('EntryAgentManager Standalone Tests', () => {
   let entryAgentManager: MockEntryAgentManager;
 
-  beforeEach(() => {
+  setup(() => {
     entryAgentManager = new MockEntryAgentManager();
   });
 
@@ -192,9 +192,9 @@ describe('EntryAgentManager Standalone Tests', () => {
     };
   }
 
-  describe('getEntryAgent', () => {
+  suite('getEntryAgent', () => {
     
-    it('should return entry agent when it exists in configuration', () => {
+    test('should return entry agent when it exists in configuration', () => {
       const agents = [
         createTestAgent('coordinator', { type: 'all' }),
         createTestAgent('specialist', { type: 'none' })
@@ -207,7 +207,7 @@ describe('EntryAgentManager Standalone Tests', () => {
       assert.strictEqual(result.name, 'coordinator');
     });
 
-    it('should return first agent when no entry agent specified', () => {
+    test('should return first agent when no entry agent specified', () => {
       const agents = [
         createTestAgent('first-agent'),
         createTestAgent('second-agent')
@@ -220,7 +220,7 @@ describe('EntryAgentManager Standalone Tests', () => {
       assert.strictEqual(result.name, 'first-agent');
     });
 
-    it('should return null when entry agent does not exist', () => {
+    test('should return null when entry agent does not exist', () => {
       const agents = [createTestAgent('coordinator')];
       const config = createTestConfiguration('non-existent', agents);
 
@@ -229,7 +229,7 @@ describe('EntryAgentManager Standalone Tests', () => {
       assert.strictEqual(result, null);
     });
 
-    it('should return null when no agents configured', () => {
+    test('should return null when no agents configured', () => {
       const config = createTestConfiguration('coordinator', []);
 
       const result = entryAgentManager.getEntryAgent(config);
@@ -238,9 +238,9 @@ describe('EntryAgentManager Standalone Tests', () => {
     });
   });
 
-  describe('validateEntryAgent', () => {
+  suite('validateEntryAgent', () => {
     
-    it('should validate existing entry agent', () => {
+    test('should validate existing entry agent', () => {
       const agents = [
         createTestAgent('coordinator'),
         createTestAgent('specialist')
@@ -251,7 +251,7 @@ describe('EntryAgentManager Standalone Tests', () => {
       assert.strictEqual(result, true);
     });
 
-    it('should reject non-existent entry agent', () => {
+    test('should reject non-existent entry agent', () => {
       const agents = [createTestAgent('coordinator')];
 
       const result = entryAgentManager.validateEntryAgent('non-existent', agents);
@@ -259,7 +259,7 @@ describe('EntryAgentManager Standalone Tests', () => {
       assert.strictEqual(result, false);
     });
 
-    it('should reject empty entry agent name', () => {
+    test('should reject empty entry agent name', () => {
       const agents = [createTestAgent('coordinator')];
 
       const result = entryAgentManager.validateEntryAgent('', agents);
@@ -268,9 +268,9 @@ describe('EntryAgentManager Standalone Tests', () => {
     });
   });
 
-  describe('getDefaultEntryAgent', () => {
+  suite('getDefaultEntryAgent', () => {
     
-    it('should return first agent as default', () => {
+    test('should return first agent as default', () => {
       const agents = [
         createTestAgent('first-agent'),
         createTestAgent('second-agent')
@@ -282,16 +282,16 @@ describe('EntryAgentManager Standalone Tests', () => {
       assert.strictEqual(result.name, 'first-agent');
     });
 
-    it('should return null for empty agents array', () => {
+    test('should return null for empty agents array', () => {
       const result = entryAgentManager.getDefaultEntryAgent([]);
       
       assert.strictEqual(result, null);
     });
   });
 
-  describe('resolveEntryAgent', () => {
+  suite('resolveEntryAgent', () => {
     
-    it('should resolve valid entry agent successfully', async () => {
+    test('should resolve valid entry agent successfully', async () => {
       const agents = [
         createTestAgent('coordinator', { type: 'all' }),
         createTestAgent('specialist', { type: 'none' })
@@ -307,7 +307,7 @@ describe('EntryAgentManager Standalone Tests', () => {
       assert.strictEqual(result.errors.length, 0);
     });
 
-    it('should use fallback when entry agent not specified', async () => {
+    test('should use fallback when entry agent not specified', async () => {
       const agents = [
         createTestAgent('first-agent'),
         createTestAgent('second-agent')
@@ -324,7 +324,7 @@ describe('EntryAgentManager Standalone Tests', () => {
       assert.ok(result.warnings[0].includes('using first agent'));
     });
 
-    it('should use fallback when entry agent does not exist', async () => {
+    test('should use fallback when entry agent does not exist', async () => {
       const agents = [
         createTestAgent('coordinator'),
         createTestAgent('specialist')
@@ -341,7 +341,7 @@ describe('EntryAgentManager Standalone Tests', () => {
       assert.ok(result.warnings[0].includes('falling back to'));
     });
 
-    it('should fail when no agents configured', async () => {
+    test('should fail when no agents configured', async () => {
       const config = createTestConfiguration('coordinator', []);
 
       const result = await entryAgentManager.resolveEntryAgent(config);
@@ -353,7 +353,7 @@ describe('EntryAgentManager Standalone Tests', () => {
       assert.ok(result.errors[0].includes('empty'));
     });
 
-    it('should fail when configuration is null', async () => {
+    test('should fail when configuration is null', async () => {
       const result = await entryAgentManager.resolveEntryAgent(null as any);
       
       assert.strictEqual(result.isValid, false);
@@ -364,9 +364,9 @@ describe('EntryAgentManager Standalone Tests', () => {
     });
   });
 
-  describe('Edge Cases', () => {
+  suite('Edge Cases', () => {
     
-    it('should handle whitespace in entry agent names', async () => {
+    test('should handle whitespace in entry agent names', async () => {
       const agents = [createTestAgent('coordinator')];
       const config = createTestConfiguration('  coordinator  ', agents);
 
@@ -380,7 +380,7 @@ describe('EntryAgentManager Standalone Tests', () => {
       assert.strictEqual(result.usedFallback, true);
     });
 
-    it('should handle special characters in agent names', async () => {
+    test('should handle special characters in agent names', async () => {
       const agents = [
         createTestAgent('agent-with-hyphens'),
         createTestAgent('agent_with_underscores'),

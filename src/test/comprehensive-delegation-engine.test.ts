@@ -284,9 +284,11 @@ suite('Comprehensive DelegationEngine Tests', () => {
       assert.strictEqual(result1, true);
 
       // Change configuration to remove permission
+      const currentConfig = await mockConfigManager.loadConfiguration();
       const newConfig = {
-        ...await mockConfigManager.loadConfiguration(),
-        customAgents: [
+        ...currentConfig,
+        agents: [
+          currentConfig.agents[0], // Keep coordinator
           {
             name: 'delegator-agent',
             systemPrompt: 'Updated agent',

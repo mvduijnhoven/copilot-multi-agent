@@ -190,7 +190,7 @@ suite('Entry Agent Validation', () => {
         agents: [createTestAgent('coordinator')]
       };
 
-      const result = EnhancedConfigurationValidator.validateWithContext(config, 'test-config');
+      const result = EnhancedConfigurationValidator.validateWithContext(config, 'test-config', { allowDefaults: false });
       assert.strictEqual(result.isValid, false);
       assert.ok(result.errors.some(error => 
         error.includes('test-config.entryAgent') && 

@@ -7,12 +7,13 @@ import { ConfigurationManager } from './configuration-manager';
 import { DefaultAgentEngine } from './agent-engine';
 import { ToolFilter } from './tool-filter';
 import { DefaultDelegationEngine } from './delegation-engine';
-import { 
-  CHAT_PARTICIPANT_ID, 
+import { EntryAgentManager } from './entry-agent-manager';
+import {
+  CHAT_PARTICIPANT_ID,
   CHAT_PARTICIPANT_NAME,
-  DEFAULT_EXTENSION_CONFIG 
+  DEFAULT_EXTENSION_CONFIG
 } from '../constants';
-import { 
+import {
   AgentExecutionError,
   MultiAgentError,
   MultiAgentErrorType,
@@ -26,12 +27,12 @@ export interface IMultiAgentChatParticipant {
    * The unique identifier for this chat participant
    */
   readonly id: string;
-  
+
   /**
    * Optional icon path for the chat participant
    */
   readonly iconPath?: vscode.Uri;
-  
+
   /**
    * Handles incoming chat requests
    * @param request The chat request
@@ -46,12 +47,12 @@ export interface IMultiAgentChatParticipant {
     stream: vscode.ChatResponseStream,
     token: vscode.CancellationToken
   ): Promise<vscode.ChatResult>;
-  
+
   /**
    * Registers the chat participant with VS Code
    */
   register(): void;
-  
+
   /**
    * Disposes of the chat participant
    */
@@ -70,6 +71,7 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
   private agentEngine: DefaultAgentEngine;
   private toolFilter: ToolFilter;
   private delegationEngine: DefaultDelegationEngine;
+  private entryAgentManager: EntryAgentManager;
   private disposables: vscode.Disposable[] = [];
 
   constructor(
@@ -83,6 +85,7 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
     this.agentEngine = agentEngine;
     this.toolFilter = toolFilter;
     this.delegationEngine = delegationEngine;
+    this.entryAgentManager = new EntryAgentManager();
     this.iconPath = iconPath;
   }
 
@@ -105,7 +108,7 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
       } catch (error) {
         console.log('Some chat participant properties not available in this VS Code version:', error);
       }
-      
+
       if (this.iconPath) {
         this.chatParticipant.iconPath = this.iconPath;
       }
@@ -158,27 +161,35 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
         await this.handleConfigurationError(stream, configError, request);
         return { metadata: { command: request.command || '', requestId: (request as any).requestId || 'unknown' } };
       }
-      
-      // Get entry agent configuration
-      const entryAgent = config.agents.find(agent => agent.name === config.entryAgent) || config.agents[0];
-      if (!entryAgent) {
-        stream.markdown('❌ No entry agent configured. Please check your multi-agent settings.');
+
+      // Resolve entry agent using EntryAgentManager with fallback logic
+      const entryAgentResolution = await this.entryAgentManager.resolveEntryAgent(config);
+
+      // Handle entry agent resolution errors and warnings
+      if (!entryAgentResolution.isValid || !entryAgentResolution.agent) {
+        await this.handleEntryAgentResolutionError(stream, entryAgentResolution, request);
         return { metadata: { command: request.command || '', requestId: (request as any).requestId || 'unknown' } };
+      }
+
+      // Show warnings if fallback was used
+      if (entryAgentResolution.usedFallback && entryAgentResolution.warnings.length > 0) {
+        stream.markdown('⚠️ **Entry Agent Notice**: ' + entryAgentResolution.warnings.join(', ') + '\n\n');
       }
 
       // Initialize entry agent with error handling
       let entryAgentContext;
       try {
-        entryAgentContext = await this.initializeEntryAgent(entryAgent);
+        entryAgentContext = await this.initializeEntryAgent(entryAgentResolution.agent);
       } catch (initError) {
         await this.handleAgentExecutionError(stream, initError, request);
         return { metadata: { command: request.command || '', requestId: (request as any).requestId || 'unknown' } };
       }
-      
-      // Process the request through the coordinator with comprehensive error handling
+
+      // Process the request through the entry agent with comprehensive error handling
       try {
-        await this.processCoordinatorRequest(
+        await this.processEntryAgentRequest(
           entryAgentContext,
+          entryAgentResolution.agent,
           request,
           context,
           stream,
@@ -215,7 +226,7 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
 
     } catch (error) {
       console.error('Unexpected error handling chat request:', error);
-      
+
       // Final fallback error handling
       try {
         await this.streamErrorResponse(stream, error);
@@ -228,7 +239,7 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
           console.error('Complete failure to communicate error to user:', finalError);
         }
       }
-      
+
       return {
         metadata: {
           command: request.command || '',
@@ -246,13 +257,13 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
     try {
       // Ensure we have a valid entry agent configuration
       const config = entryAgentConfig;
-      
+
       // Load the complete extension configuration for delegation context
       const extensionConfig = await this.configurationManager.loadConfiguration();
-      
+
       // Initialize the coordinator agent with extended system prompt
       const context = await this.agentEngine.initializeAgent(config, extensionConfig);
-      
+
       return context;
     } catch (error) {
       throw new AgentExecutionError(
@@ -264,10 +275,11 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
   }
 
   /**
-   * Processes a request through the coordinator agent
+   * Processes a request through the entry agent
    */
-  private async processCoordinatorRequest(
-    coordinatorContext: AgentExecutionContext,
+  private async processEntryAgentRequest(
+    entryAgentContext: AgentExecutionContext,
+    entryAgentConfig: AgentConfiguration,
     request: vscode.ChatRequest,
     context: vscode.ChatContext,
     stream: vscode.ChatResponseStream,
@@ -276,54 +288,52 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
     try {
       // Extract the user's message
       const userMessage = request.prompt || '';
-      
+
       // Check for cancellation before processing
       if (token.isCancellationRequested) {
         return;
       }
 
-      // Stream initial response
-      stream.markdown('🤖 **Multi-Agent Coordinator** is processing your request...\n\n');
+      // Stream initial response with entry agent name
+      stream.markdown(`🤖 **${entryAgentConfig.name}** (Entry Agent) is processing your request...\n\n`);
 
-      // Get entry agent configuration to check delegation permissions
-      const config = await this.configurationManager.loadConfiguration();
-      const entryAgentConfig = config.agents.find(agent => agent.name === config.entryAgent) || config.agents[0];
-
-      // Apply tool filtering for coordinator agent
-      const filteredTools = await this.toolFilter.getAvailableTools('coordinator');
-      coordinatorContext.availableTools = filteredTools;
+      // Apply tool filtering for entry agent
+      const filteredTools = await this.toolFilter.getAvailableTools(entryAgentConfig.name);
+      entryAgentContext.availableTools = filteredTools;
 
       // Provision delegation tools if delegation is allowed
-      const delegationTools = await this.provisionDelegationTools(entryAgentConfig, coordinatorContext);
-      
+      const delegationTools = await this.provisionDelegationTools(entryAgentConfig, entryAgentContext);
+
       // Stream information about available capabilities
-      await this.streamCoordinatorCapabilities(stream, coordinatorContext, delegationTools);
+      await this.streamEntryAgentCapabilities(stream, entryAgentContext, entryAgentConfig, delegationTools);
 
       // Check for cancellation before executing
       if (token.isCancellationRequested) {
         return;
       }
 
-      // Execute the coordinator agent with enhanced context and streaming
-      const enhancedContext = await this.enhanceCoordinatorContext(coordinatorContext, request, context);
-      
+      // Execute the entry agent with enhanced context and streaming
+      const enhancedContext = await this.enhanceEntryAgentContext(entryAgentContext, request, context);
+
       // Create response promise for streaming
-      const responsePromise = this.executeCoordinatorWithTools(enhancedContext, userMessage, delegationTools, token);
-      
+      const responsePromise = this.executeEntryAgentWithTools(enhancedContext, entryAgentConfig, userMessage, delegationTools, token);
+
       // Stream response with progress updates
       stream.markdown('**Response:**\n\n');
       await this.streamResponseWithProgress(stream, responsePromise, token);
 
       // Add context information
       stream.markdown('\n\n---\n');
-      stream.markdown(`*Agent: ${coordinatorContext.agentName}*\n`);
-      stream.markdown(`*Tools Available: ${coordinatorContext.availableTools.length}*\n`);
-      
+      stream.markdown(`*Agent: ${entryAgentContext.agentName}*\n`);
+      stream.markdown(`*Description: ${entryAgentConfig.description}*\n`);
+      stream.markdown(`*Use For: ${entryAgentConfig.useFor}*\n`);
+      stream.markdown(`*Tools Available: ${entryAgentContext.availableTools.length}*\n`);
+
       if (delegationTools.length > 0) {
-        stream.markdown(`*Delegation Enabled: ${delegationTools.map(t => t.name).join(', ')}*\n`);
+        stream.markdown(`*Delegation Enabled: ${delegationTools.map(t => (t as any).name || 'unknown').join(', ')}*\n`);
       }
 
-      // Show available custom agents if delegation is enabled
+      // Show available agents for delegation if delegation is enabled
       if (entryAgentConfig.delegationPermissions.type !== 'none') {
         const availableAgents = await this.getAvailableAgentsForDelegation(entryAgentConfig);
         if (availableAgents.length > 0) {
@@ -333,105 +343,128 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
 
     } catch (error) {
       throw new AgentExecutionError(
-        `Failed to process coordinator request: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        'coordinator',
+        `Failed to process entry agent request: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        entryAgentConfig.name,
         { originalError: error, request: request.prompt }
       );
     }
   }
 
   /**
-   * Provisions delegation tools for the coordinator agent based on permissions
+   * Provisions delegation tools for the entry agent based on permissions
    */
   private async provisionDelegationTools(
     entryAgentConfig: AgentConfiguration,
     entryAgentContext: AgentExecutionContext
-  ): Promise<any[]> {
-    const delegationTools: any[] = [];
+  ): Promise<vscode.LanguageModelTool<any>[]> {
+    const delegationTools: vscode.LanguageModelTool<any>[] = [];
 
     // Check if delegation is allowed
     if (entryAgentConfig.delegationPermissions.type === 'none') {
       return delegationTools;
     }
 
-    // Check if entry agent has access to delegation tools
-    const hasDelegate = await this.toolFilter.hasToolAccess(entryAgentConfig.name, 'delegateWork');
-    const hasReport = await this.toolFilter.hasToolAccess(entryAgentConfig.name, 'reportOut');
+    try {
+      // Load current configuration for tool creation
+      const extensionConfig = await this.configurationManager.loadConfiguration();
 
-    if (hasDelegate) {
-      // Create delegateWork tool instance for this coordinator
-      // Note: Using placeholder for now since actual tool integration will be done in a later task
-      delegationTools.push({
-        name: 'delegateWork',
-        description: 'Delegate work to another agent'
-      });
-    }
+      // Check if entry agent has access to delegation tools
+      const hasDelegate = await this.toolFilter.hasToolAccess(entryAgentConfig.name, 'delegateWork');
+      const hasReport = await this.toolFilter.hasToolAccess(entryAgentConfig.name, 'reportOut');
 
-    if (hasReport) {
-      // Create reportOut tool instance for this coordinator
-      // Note: Using placeholder for now since actual tool integration will be done in a later task
-      delegationTools.push({
-        name: 'reportOut',
-        description: 'Report completion of delegated work'
-      });
+      if (hasDelegate) {
+        // Import and create delegateWork tool instance
+        const { DelegateWorkTool } = await import('../tools/delegate-work-tool.js');
+        const { SystemPromptBuilder } = await import('./system-prompt-builder.js');
+        
+        const systemPromptBuilder = new SystemPromptBuilder();
+        const delegateWorkTool = new DelegateWorkTool(
+          this.delegationEngine,
+          entryAgentConfig.name,
+          systemPromptBuilder,
+          extensionConfig
+        );
+        
+        delegationTools.push(delegateWorkTool);
+      }
+
+      if (hasReport) {
+        // Import and create reportOut tool instance
+        const { ReportOutTool } = await import('../tools/report-out-tool.js');
+        
+        const reportOutTool = new ReportOutTool(
+          this.delegationEngine,
+          entryAgentConfig.name,
+          entryAgentContext.conversationId
+        );
+        
+        delegationTools.push(reportOutTool);
+      }
+
+    } catch (error) {
+      console.error('Failed to provision delegation tools:', error);
+      // Return empty array on error to prevent breaking the flow
     }
 
     return delegationTools;
   }
 
   /**
-   * Streams information about coordinator capabilities
+   * Streams information about entry agent capabilities
    */
-  private async streamCoordinatorCapabilities(
+  private async streamEntryAgentCapabilities(
     stream: vscode.ChatResponseStream,
-    coordinatorContext: AgentExecutionContext,
-    delegationTools: any[]
+    entryAgentContext: AgentExecutionContext,
+    entryAgentConfig: AgentConfiguration,
+    delegationTools: vscode.LanguageModelTool<any>[]
   ): Promise<void> {
-    stream.markdown('**Coordinator Capabilities:**\n');
-    stream.markdown(`- Available Tools: ${coordinatorContext.availableTools.length}\n`);
-    
+    stream.markdown(`**${entryAgentConfig.name} Capabilities:**\n`);
+    stream.markdown(`- Description: ${entryAgentConfig.description}\n`);
+    stream.markdown(`- Use For: ${entryAgentConfig.useFor}\n`);
+    stream.markdown(`- Available Tools: ${entryAgentContext.availableTools.length}\n`);
+
     // Show tool names for debugging (limit to first 10 to avoid clutter)
-    if (coordinatorContext.availableTools.length > 0) {
-      const toolNames = coordinatorContext.availableTools
+    if (entryAgentContext.availableTools.length > 0) {
+      const toolNames = entryAgentContext.availableTools
         .map(tool => tool.name || 'unknown')
         .slice(0, 10);
       const displayNames = toolNames.join(', ');
-      const moreCount = coordinatorContext.availableTools.length - toolNames.length;
-      
+      const moreCount = entryAgentContext.availableTools.length - toolNames.length;
+
       stream.markdown(`- Tool Names: ${displayNames}${moreCount > 0 ? ` (+${moreCount} more)` : ''}\n`);
     }
-    
+
     if (delegationTools.length > 0) {
-      stream.markdown(`- Delegation Tools: ${delegationTools.map(t => t.name).join(', ')}\n`);
+      stream.markdown(`- Delegation Tools: ${delegationTools.map(t => (t as any).name || 'unknown').join(', ')}\n`);
     } else {
       stream.markdown('- Delegation: Disabled\n');
     }
-    
+
     stream.markdown('\n');
   }
 
   /**
-   * Enhances coordinator context with additional information
+   * Enhances entry agent context with additional information
    */
-  private async enhanceCoordinatorContext(
-    coordinatorContext: AgentExecutionContext,
+  private async enhanceEntryAgentContext(
+    entryAgentContext: AgentExecutionContext,
     request: vscode.ChatRequest,
     context: vscode.ChatContext
   ): Promise<AgentExecutionContext> {
-    // Add chat context information to the coordinator context
-    const enhancedContext = { ...coordinatorContext };
-    
+    // Add chat context information to the entry agent context
+    const enhancedContext = { ...entryAgentContext };
+
     // Include chat history if available
     if (context.history && context.history.length > 0) {
-      // Add recent chat history to help coordinator understand context
+      // Add recent chat history to help entry agent understand context
       const recentHistory = context.history.slice(-3); // Last 3 messages
-      enhancedContext.systemPrompt += '\n\nRecent conversation context:\n' + 
+      enhancedContext.systemPrompt += '\n\nRecent conversation context:\n' +
         recentHistory.map((msg: any) => `${msg.participant || 'User'}: ${msg.prompt || msg.response || ''}`).join('\n');
     }
 
     // Add request references if available
     if (request.references && request.references.length > 0) {
-      enhancedContext.systemPrompt += '\n\nReferenced files/locations:\n' + 
+      enhancedContext.systemPrompt += '\n\nReferenced files/locations:\n' +
         request.references.map((ref: any) => `- ${ref.id || ref.uri || ref}`).join('\n');
     }
 
@@ -439,12 +472,13 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
   }
 
   /**
-   * Executes the coordinator agent with tools and streaming support
+   * Executes the entry agent with tools and streaming support
    */
-  private async executeCoordinatorWithTools(
-    coordinatorContext: AgentExecutionContext,
+  private async executeEntryAgentWithTools(
+    entryAgentContext: AgentExecutionContext,
+    entryAgentConfig: AgentConfiguration,
     userMessage: string,
-    delegationTools: any[],
+    delegationTools: vscode.LanguageModelTool<any>[],
     token: vscode.CancellationToken
   ): Promise<string> {
     try {
@@ -453,16 +487,148 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
         throw new vscode.CancellationError();
       }
 
-      // For now, simulate coordinator execution with tool awareness
-      // This will be replaced with actual VS Code Language Model integration in a future task
-      
-      let response = `I'm the multi-agent coordinator. I've analyzed your request: "${userMessage}"\n\n`;
-      
-      // Simulate coordinator decision-making with error handling
+      // Try to use VS Code Language Model API if available
+      if (this.isLanguageModelAvailable()) {
+        return await this.executeWithLanguageModel(
+          entryAgentContext,
+          entryAgentConfig,
+          userMessage,
+          delegationTools,
+          token
+        );
+      }
+
+      // Fallback to simulation for environments where language model is not available
+      return await this.executeWithSimulation(
+        entryAgentContext,
+        entryAgentConfig,
+        userMessage,
+        delegationTools,
+        token
+      );
+
+    } catch (error) {
+      if (error instanceof vscode.CancellationError) {
+        throw error;
+      }
+
+      // Handle execution errors gracefully
+      throw new AgentExecutionError(
+        `Entry agent execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        entryAgentConfig.name,
+        { originalError: error, userMessage }
+      );
+    }
+  }
+
+  /**
+   * Executes the entry agent using VS Code Language Model API
+   */
+  private async executeWithLanguageModel(
+    entryAgentContext: AgentExecutionContext,
+    entryAgentConfig: AgentConfiguration,
+    userMessage: string,
+    delegationTools: vscode.LanguageModelTool<any>[],
+    token: vscode.CancellationToken
+  ): Promise<string> {
+    try {
+      // Check for cancellation
+      if (token.isCancellationRequested) {
+        throw new vscode.CancellationError();
+      }
+
+      // Get available language models
+      const models = await vscode.lm.selectChatModels({
+        vendor: 'copilot',
+        family: 'gpt-4o'
+      });
+
+      if (models.length === 0) {
+        console.warn('No suitable language models available, falling back to simulation');
+        return await this.executeWithSimulation(
+          entryAgentContext,
+          entryAgentConfig,
+          userMessage,
+          delegationTools,
+          token
+        );
+      }
+
+      const model = models[0];
+
+      // Prepare messages with system prompt and user input
+      const messages = [
+        vscode.LanguageModelChatMessage.User(entryAgentContext.systemPrompt),
+        vscode.LanguageModelChatMessage.User(userMessage)
+      ];
+
+      // Prepare request options with tools if available
+      const requestOptions: any = {};
       if (delegationTools.length > 0) {
-        response += "I have delegation capabilities available. ";
-        
-        // Simple heuristics to suggest delegation (this would be replaced by actual LLM reasoning)
+        requestOptions.tools = delegationTools;
+      }
+
+      // Send request to language model
+      const response = await model.sendRequest(messages, requestOptions, token);
+
+      // Collect response text
+      let responseText = '';
+      for await (const fragment of response.text) {
+        if (token.isCancellationRequested) {
+          throw new vscode.CancellationError();
+        }
+        responseText += fragment;
+      }
+
+      return responseText || 'No response received from language model';
+
+    } catch (error) {
+      if (error instanceof vscode.CancellationError) {
+        throw error;
+      }
+
+      console.warn('Language model execution failed, falling back to simulation:', error);
+      return await this.executeWithSimulation(
+        entryAgentContext,
+        entryAgentConfig,
+        userMessage,
+        delegationTools,
+        token
+      );
+    }
+  }
+
+  /**
+   * Executes the entry agent with simulation (fallback)
+   */
+  private async executeWithSimulation(
+    entryAgentContext: AgentExecutionContext,
+    entryAgentConfig: AgentConfiguration,
+    userMessage: string,
+    delegationTools: vscode.LanguageModelTool<any>[],
+    token: vscode.CancellationToken
+  ): Promise<string> {
+    // Check for cancellation
+    if (token.isCancellationRequested) {
+      throw new vscode.CancellationError();
+    }
+
+    let response = `I'm ${entryAgentConfig.name}, your entry agent. I've analyzed your request: "${userMessage}"\n\n`;
+    response += `My role: ${entryAgentConfig.description}\n`;
+    response += `I specialize in: ${entryAgentConfig.useFor}\n\n`;
+
+    // Simulate coordinator decision-making with error handling
+    if (delegationTools.length > 0) {
+      response += "I have delegation capabilities available. ";
+
+      // Simple heuristics to suggest delegation based on entry agent's capabilities
+      const canHandleDirectly = this.canEntryAgentHandleRequest(userMessage, entryAgentConfig);
+
+      if (canHandleDirectly) {
+        response += "Based on my specialization, I can handle this request directly.\n\n";
+        response += "Processing your request with my available tools...";
+      } else {
+        // Suggest delegation based on request content
         if (userMessage.toLowerCase().includes('code review') || userMessage.toLowerCase().includes('review')) {
           response += "This looks like a code review task that could benefit from a specialized code review agent.\n\n";
           response += "I would typically use the `delegateWork` tool to assign this to a code review specialist.";
@@ -474,32 +640,47 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
           response += "I would typically use the `delegateWork` tool to assign this to a documentation agent.";
         } else {
           response += "I can handle this request directly or delegate it to a specialized agent if needed.\n\n";
-          response += "Available delegation tools: " + delegationTools.map(t => t.name).join(', ');
+          response += "Available delegation tools: " + delegationTools.map(t => (t as any).name || 'unknown').join(', ');
         }
-      } else {
-        response += "I'll handle this request directly as delegation is not currently enabled.\n\n";
-        response += "Processing your request with my available tools...";
       }
-
-      // Check for cancellation before returning
-      if (token.isCancellationRequested) {
-        throw new vscode.CancellationError();
-      }
-
-      return response;
-
-    } catch (error) {
-      if (error instanceof vscode.CancellationError) {
-        throw error;
-      }
-
-      // Handle execution errors gracefully
-      throw new AgentExecutionError(
-        `Coordinator execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        'coordinator',
-        { originalError: error, userMessage }
-      );
+    } else {
+      response += "I'll handle this request directly as delegation is not currently enabled.\n\n";
+      response += "Processing your request with my available tools...";
     }
+
+    // Check for cancellation before returning
+    if (token.isCancellationRequested) {
+      throw new vscode.CancellationError();
+    }
+
+    return response;
+  }
+
+  /**
+   * Checks if VS Code Language Model API is available
+   */
+  private isLanguageModelAvailable(): boolean {
+    try {
+      return !!(vscode.lm && vscode.lm.selectChatModels && typeof vscode.lm.selectChatModels === 'function');
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Determines if the entry agent can handle the request directly based on its specialization
+   */
+  private canEntryAgentHandleRequest(userMessage: string, entryAgentConfig: AgentConfiguration): boolean {
+    const message = userMessage.toLowerCase();
+    const useFor = entryAgentConfig.useFor.toLowerCase();
+    const description = entryAgentConfig.description.toLowerCase();
+
+    // Simple keyword matching to determine if the request aligns with agent's specialization
+    const keywords = [...useFor.split(/[,\s]+/), ...description.split(/[,\s]+/)];
+
+    return keywords.some(keyword =>
+      keyword.length > 3 && message.includes(keyword)
+    );
   }
 
   /**
@@ -546,10 +727,10 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
     error: unknown
   ): Promise<string> {
     let fallbackResponse = '🔄 **Fallback Mode**: The multi-agent coordinator encountered an issue, but I can still help.\n\n';
-    
+
     // Provide basic assistance based on request content
     const userMessage = request.prompt?.toLowerCase() || '';
-    
+
     if (userMessage.includes('code') || userMessage.includes('programming')) {
       fallbackResponse += 'I can help with code-related questions. Please describe what you need assistance with.';
     } else if (userMessage.includes('test') || userMessage.includes('testing')) {
@@ -566,6 +747,58 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
   }
 
   /**
+   * Handles entry agent resolution errors with fallback
+   */
+  private async handleEntryAgentResolutionError(
+    stream: vscode.ChatResponseStream,
+    resolution: {
+      agent: AgentConfiguration | null;
+      isValid: boolean;
+      errors: string[];
+      warnings: string[];
+      usedFallback: boolean;
+    },
+    request: vscode.ChatRequest
+  ): Promise<void> {
+    try {
+      // Stream error information
+      stream.markdown('⚠️ **Entry Agent Resolution Issue**\n\n');
+
+      if (resolution.errors.length > 0) {
+        stream.markdown('**Errors:**\n');
+        resolution.errors.forEach(error => {
+          stream.markdown(`- ${error}\n`);
+        });
+        stream.markdown('\n');
+      }
+
+      if (resolution.warnings.length > 0) {
+        stream.markdown('**Warnings:**\n');
+        resolution.warnings.forEach(warning => {
+          stream.markdown(`- ${warning}\n`);
+        });
+        stream.markdown('\n');
+      }
+
+      // Provide recovery suggestions
+      stream.markdown('**Recovery Options:**\n');
+      stream.markdown('1. Check your entry agent configuration in VS Code settings\n');
+      stream.markdown('2. Ensure at least one agent is configured\n');
+      stream.markdown('3. Verify that the specified entry agent exists in your agents list\n');
+      stream.markdown('4. Reset to default configuration if needed\n\n');
+
+      // Attempt to provide fallback response
+      const fallbackResponse = await this.createFallbackResponse(request, new Error('Entry agent resolution failed'));
+      stream.markdown('**Fallback Response:**\n\n');
+      stream.markdown(fallbackResponse);
+
+    } catch (fallbackError) {
+      console.error('Failed to handle entry agent resolution error:', fallbackError);
+      stream.markdown('❌ Unable to resolve entry agent configuration. Please check your settings and try again.');
+    }
+  }
+
+  /**
    * Handles configuration-related errors with recovery
    */
   private async handleConfigurationError(
@@ -576,7 +809,7 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
     try {
       // Stream error information
       stream.markdown('⚠️ **Configuration Issue Detected**\n\n');
-      
+
       if (error && typeof error === 'object' && 'type' in error) {
         const multiAgentError = error as MultiAgentError;
         stream.markdown(`**Error**: ${multiAgentError.message}\n\n`);
@@ -612,7 +845,7 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
     try {
       // Stream error information
       stream.markdown('⚠️ **Agent Execution Issue**\n\n');
-      
+
       if (error && typeof error === 'object' && 'type' in error) {
         const multiAgentError = error as MultiAgentError;
         if (multiAgentError.agentName) {
@@ -691,18 +924,18 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
     switch (entryAgentConfig.delegationPermissions.type) {
       case 'all':
         return allOtherAgents;
-      
+
       case 'none':
         return [];
-      
+
       case 'specific':
         if (!entryAgentConfig.delegationPermissions.agents) {
           return [];
         }
-        return entryAgentConfig.delegationPermissions.agents.filter(agentName => 
+        return entryAgentConfig.delegationPermissions.agents.filter(agentName =>
           allOtherAgents.includes(agentName)
         );
-      
+
       default:
         return [];
     }
@@ -716,15 +949,15 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
       if (error && typeof error === 'object' && 'type' in error) {
         const multiAgentError = error as MultiAgentError;
         stream.markdown(`❌ **Multi-Agent Error**: ${multiAgentError.message}\n\n`);
-        
+
         if (multiAgentError.agentName) {
           stream.markdown(`**Agent**: ${multiAgentError.agentName}\n`);
         }
-        
+
         if (multiAgentError.type) {
           stream.markdown(`**Error Type**: ${multiAgentError.type}\n`);
         }
-        
+
         // Provide helpful suggestions based on error type
         switch (multiAgentError.type) {
           case MultiAgentErrorType.CONFIGURATION_ERROR:
@@ -741,11 +974,11 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
         }
       } else if (error instanceof AgentExecutionError) {
         stream.markdown(`❌ **Agent Execution Error**: ${error.message}\n\n`);
-        
+
         if (error.agentName) {
           stream.markdown(`**Agent**: ${error.agentName}\n`);
         }
-        
+
         stream.markdown('\n💡 **Suggestion**: Check the agent configuration and try again.');
       } else {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -775,10 +1008,10 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
         console.error('Error disposing chat participant resource:', error);
       }
     });
-    
+
     this.disposables = [];
     this.chatParticipant = undefined;
-    
+
     console.log('Multi-agent chat participant disposed');
   }
 

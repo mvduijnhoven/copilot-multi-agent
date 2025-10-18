@@ -4,7 +4,7 @@
 
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import { beforeEach, afterEach, describe, it } from 'mocha';
+// Removed mocha imports - using VS Code test framework
 import * as sinon from 'sinon';
 
 // Import extension functions and types
@@ -19,13 +19,13 @@ import { ConfigurationManager } from '../services/configuration-manager';
 import { MultiAgentChatParticipant } from '../services/chat-participant';
 import { CHAT_PARTICIPANT_ID, DEFAULT_EXTENSION_CONFIG } from '../constants';
 
-describe('Extension Activation and Lifecycle', () => {
+suite('Extension Activation and Lifecycle', () => {
   let mockContext: vscode.ExtensionContext;
   let sandbox: sinon.SinonSandbox;
   let mockWorkspaceConfig: sinon.SinonStubbedInstance<vscode.WorkspaceConfiguration>;
   let mockChatParticipant: sinon.SinonStubbedInstance<vscode.ChatParticipant>;
 
-  beforeEach(() => {
+  setup(() => {
     sandbox = sinon.createSandbox();
     
     // Create mock extension context
@@ -89,9 +89,11 @@ describe('Extension Activation and Lifecycle', () => {
     mockWorkspaceConfig.get.withArgs('entryAgent').returns(DEFAULT_EXTENSION_CONFIG.entryAgent);
     mockWorkspaceConfig.get.withArgs('agents').returns(DEFAULT_EXTENSION_CONFIG.agents);
     mockWorkspaceConfig.get.withArgs('showActivationMessage', false).returns(false);
+    mockWorkspaceConfig.has.withArgs('entryAgent').returns(true);
+    mockWorkspaceConfig.has.withArgs('agents').returns(true);
   });
 
-  afterEach(async () => {
+  teardown(async () => {
     // Clean up extension state
     try {
       await deactivate();
@@ -102,8 +104,8 @@ describe('Extension Activation and Lifecycle', () => {
     sandbox.restore();
   });
 
-  describe('Extension Activation', () => {
-    it('should activate successfully with default configuration', async () => {
+  suite('Extension Activation', () => {
+    test('should activate successfully with default configuration', async () => {
       // Act
       await activate(mockContext);
 
@@ -121,7 +123,7 @@ describe('Extension Activation and Lifecycle', () => {
       assert.ok(state.errorHandler, 'Error handler should be initialized');
     });
 
-    it('should register chat participant with correct ID', async () => {
+    test('should register chat participant with correct ID', async () => {
       // Act
       await activate(mockContext);
 
@@ -133,7 +135,7 @@ describe('Extension Activation and Lifecycle', () => {
       assert.strictEqual(typeof createCall.args[1], 'function', 'Should provide request handler');
     });
 
-    it('should register extension commands', async () => {
+    test('should register extension commands', async () => {
       // Act
       await activate(mockContext);
 
@@ -148,7 +150,7 @@ describe('Extension Activation and Lifecycle', () => {
       assert.ok(commandNames.includes('copilot-multi-agent.openSettings'), 'Should register settings command');
     });
 
-    it('should add disposables to context subscriptions', async () => {
+    test('should add disposables to context subscriptions', async () => {
       // Act
       await activate(mockContext);
 
@@ -162,7 +164,7 @@ describe('Extension Activation and Lifecycle', () => {
       });
     });
 
-    it('should handle configuration loading errors gracefully', async () => {
+    test('should handle configuration loading errors gracefully', async () => {
       // Arrange
       mockWorkspaceConfig.get.withArgs('coordinator').throws(new Error('Configuration error'));
 
@@ -177,7 +179,7 @@ describe('Extension Activation and Lifecycle', () => {
       assert.ok(state, 'Extension state should exist');
     });
 
-    it('should handle chat participant registration errors', async () => {
+    test('should handle chat participant registration errors', async () => {
       // Arrange
       (vscode.chat.createChatParticipant as sinon.SinonStub).throws(new Error('Chat API error'));
 
@@ -195,7 +197,7 @@ describe('Extension Activation and Lifecycle', () => {
       assert.ok(showWarningStub.called, 'Should show warning about chat participant failure');
     });
 
-    it('should show activation message when configured', async () => {
+    test('should show activation message when configured', async () => {
       // Arrange
       mockWorkspaceConfig.get.withArgs('showActivationMessage', false).returns(true);
 
@@ -210,7 +212,7 @@ describe('Extension Activation and Lifecycle', () => {
         'Should show correct activation message');
     });
 
-    it('should set up configuration monitoring', async () => {
+    test('should set up configuration monitoring', async () => {
       // Act
       await activate(mockContext);
 
@@ -220,7 +222,7 @@ describe('Extension Activation and Lifecycle', () => {
         'Should set up configuration change listener');
     });
 
-    it('should initialize components in correct order', async () => {
+    test('should initialize components in correct order', async () => {
       // Act
       await activate(mockContext);
 
@@ -231,20 +233,60 @@ describe('Extension Activation and Lifecycle', () => {
       // Verify all components are initialized
       assert.ok(state.errorHandler, 'Error handler should be initialized first');
       assert.ok(state.configurationManager, 'Configuration manager should be initialized');
+      assert.ok(state.entryAgentManager, 'Entry agent manager should be initialized');
       assert.ok(state.agentEngine, 'Agent engine should be initialized');
       assert.ok(state.toolFilter, 'Tool filter should be initialized');
       assert.ok(state.delegationEngine, 'Delegation engine should be initialized');
       assert.ok(state.chatParticipant, 'Chat participant should be initialized last');
     });
+
+    test('should initialize entry agent manager with proper configuration', async () => {
+      // Act
+      await activate(mockContext);
+
+      // Assert
+      const state = getExtensionState();
+      assert.ok(state, 'Extension state should exist');
+      assert.ok(state.entryAgentManager, 'Entry agent manager should be initialized');
+      
+      // Test entry agent resolution
+      const config = await state.configurationManager.loadConfiguration();
+      const entryAgent = state.entryAgentManager.getEntryAgent(config);
+      assert.ok(entryAgent, 'Should resolve entry agent from configuration');
+      assert.strictEqual(typeof entryAgent.name, 'string', 'Entry agent should have a name');
+    });
+
+    test('should handle entry agent fallback when configured agent not found', async () => {
+      // Arrange
+      mockWorkspaceConfig.get.withArgs('entryAgent').returns('nonexistent-agent');
+
+      // Act
+      await activate(mockContext);
+
+      // Assert
+      const state = getExtensionState();
+      assert.ok(state, 'Extension state should exist');
+      
+      // Test the entry agent manager directly with invalid configuration
+      const invalidConfig = {
+        entryAgent: 'nonexistent-agent',
+        agents: DEFAULT_EXTENSION_CONFIG.agents
+      };
+      const resolution = await state.entryAgentManager.resolveEntryAgent(invalidConfig);
+      
+      assert.ok(resolution.agent, 'Should resolve to fallback agent');
+      assert.strictEqual(resolution.usedFallback, true, 'Should indicate fallback was used');
+      assert.ok(resolution.warnings.length > 0, 'Should have warnings about fallback');
+    });
   });
 
-  describe('Extension Deactivation', () => {
-    beforeEach(async () => {
+  suite('Extension Deactivation', () => {
+    setup(async () => {
       // Activate extension before each deactivation test
       await activate(mockContext);
     });
 
-    it('should deactivate successfully', async () => {
+    test('should deactivate successfully', async () => {
       // Act
       await deactivate();
 
@@ -253,7 +295,7 @@ describe('Extension Activation and Lifecycle', () => {
       assert.strictEqual(state, undefined, 'Extension state should be cleared');
     });
 
-    it('should dispose of chat participant', async () => {
+    test('should dispose of chat participant', async () => {
       // Arrange
       const state = getExtensionState();
       assert.ok(state, 'Extension should be activated');
@@ -266,7 +308,7 @@ describe('Extension Activation and Lifecycle', () => {
       assert.ok(disposeSpy.calledOnce, 'Should dispose chat participant');
     });
 
-    it('should dispose of configuration manager', async () => {
+    test('should dispose of configuration manager', async () => {
       // Arrange
       const state = getExtensionState();
       assert.ok(state, 'Extension should be activated');
@@ -279,7 +321,7 @@ describe('Extension Activation and Lifecycle', () => {
       assert.ok(disposeSpy.calledOnce, 'Should dispose configuration manager');
     });
 
-    it('should cleanup delegation engine', async () => {
+    test('should cleanup delegation engine', async () => {
       // Arrange
       const state = getExtensionState();
       assert.ok(state, 'Extension should be activated');
@@ -292,7 +334,7 @@ describe('Extension Activation and Lifecycle', () => {
       assert.ok(cleanupSpy.calledOnce, 'Should cleanup delegation engine');
     });
 
-    it('should handle disposal errors gracefully', async () => {
+    test('should handle disposal errors gracefully', async () => {
       // Arrange
       const state = getExtensionState();
       assert.ok(state, 'Extension should be activated');
@@ -304,12 +346,12 @@ describe('Extension Activation and Lifecycle', () => {
     });
   });
 
-  describe('Extension Commands', () => {
-    beforeEach(async () => {
+  suite('Extension Commands', () => {
+    setup(async () => {
       await activate(mockContext);
     });
 
-    it('should handle reset configuration command', async () => {
+    test('should handle reset configuration command', async () => {
       // Arrange
       const registerCommandStub = vscode.commands.registerCommand as sinon.SinonStub;
       const resetCommandCall = registerCommandStub.getCalls()
@@ -330,7 +372,7 @@ describe('Extension Activation and Lifecycle', () => {
       assert.ok(showInfoStub.calledOnce, 'Should show success message');
     });
 
-    it('should handle validate configuration command', async () => {
+    test('should handle validate configuration command', async () => {
       // Arrange
       const registerCommandStub = vscode.commands.registerCommand as sinon.SinonStub;
       const validateCommandCall = registerCommandStub.getCalls()
@@ -348,7 +390,7 @@ describe('Extension Activation and Lifecycle', () => {
       assert.ok(showInfoStub.calledOnce, 'Should show validation result');
     });
 
-    it('should handle show status command', async () => {
+    test('should handle show status command', async () => {
       // Arrange
       const registerCommandStub = vscode.commands.registerCommand as sinon.SinonStub;
       const statusCommandCall = registerCommandStub.getCalls()
@@ -369,7 +411,7 @@ describe('Extension Activation and Lifecycle', () => {
         'Should show status message');
     });
 
-    it('should handle open settings command', async () => {
+    test('should handle open settings command', async () => {
       // Arrange
       const registerCommandStub = vscode.commands.registerCommand as sinon.SinonStub;
       const settingsCommandCall = registerCommandStub.getCalls()
@@ -388,10 +430,44 @@ describe('Extension Activation and Lifecycle', () => {
       assert.strictEqual(executeCommandStub.getCall(0).args[0], 'workbench.action.openSettings');
       assert.strictEqual(executeCommandStub.getCall(0).args[1], 'copilotMultiAgent');
     });
+
+    test('should handle show entry agent status command', async () => {
+      // Arrange
+      const registerCommandStub = vscode.commands.registerCommand as sinon.SinonStub;
+      const entryAgentStatusCommandCall = registerCommandStub.getCalls()
+        .find((call: any) => call.args[0] === 'copilot-multi-agent.showEntryAgentStatus');
+      
+      assert.ok(entryAgentStatusCommandCall, 'Entry agent status command should be registered');
+      
+      const statusHandler = entryAgentStatusCommandCall.args[1];
+
+      // Act
+      await statusHandler();
+
+      // Assert
+      const showInfoStub = vscode.window.showInformationMessage as sinon.SinonStub;
+      assert.ok(showInfoStub.calledOnce, 'Should show entry agent status information');
+      const messageCall = showInfoStub.getCall(0);
+      assert.ok(messageCall.args[0].includes('Entry Agent Status'), 
+        'Should show entry agent status message');
+    });
+
+    test('should register entry agent status command', async () => {
+      // Act
+      await activate(mockContext);
+
+      // Assert
+      const registerCommandStub = vscode.commands.registerCommand as sinon.SinonStub;
+      assert.ok(registerCommandStub.called, 'Should register commands');
+      
+      const commandNames = registerCommandStub.getCalls().map((call: any) => call.args[0]);
+      assert.ok(commandNames.includes('copilot-multi-agent.showEntryAgentStatus'), 
+        'Should register entry agent status command');
+    });
   });
 
-  describe('Configuration Monitoring', () => {
-    it('should handle configuration changes', async () => {
+  suite('Configuration Monitoring', () => {
+    test('should handle configuration changes', async () => {
       // Arrange
       let configChangeHandler: (event: vscode.ConfigurationChangeEvent) => void;
       const onDidChangeConfigStub = vscode.workspace.onDidChangeConfiguration as sinon.SinonStub;
@@ -415,7 +491,7 @@ describe('Extension Activation and Lifecycle', () => {
         'Should check if configuration affects extension');
     });
 
-    it('should handle configuration change errors gracefully', async () => {
+    test('should handle configuration change errors gracefully', async () => {
       // Arrange
       let configChangeHandler: (event: vscode.ConfigurationChangeEvent) => void;
       const onDidChangeConfigStub = vscode.workspace.onDidChangeConfiguration as sinon.SinonStub;
@@ -440,8 +516,8 @@ describe('Extension Activation and Lifecycle', () => {
     });
   });
 
-  describe('Error Handling', () => {
-    it('should handle initialization errors without crashing', async () => {
+  suite('Error Handling', () => {
+    test('should handle initialization errors without crashing', async () => {
       // Arrange
       mockWorkspaceConfig.get.throws(new Error('Critical initialization error'));
       (vscode.chat.createChatParticipant as sinon.SinonStub).throws(new Error('Chat API unavailable'));
@@ -456,7 +532,7 @@ describe('Extension Activation and Lifecycle', () => {
       assert.strictEqual(isExtensionInitialized(), true, 'Should be initialized with fallback configuration');
     });
 
-    it('should show error notification on initialization failure', async () => {
+    test('should show error notification on initialization failure', async () => {
       // Arrange
       (vscode.chat.createChatParticipant as sinon.SinonStub).throws(new Error('Chat API error'));
 
@@ -475,8 +551,8 @@ describe('Extension Activation and Lifecycle', () => {
     });
   });
 
-  describe('Extension State Management', () => {
-    it('should provide access to extension state', async () => {
+  suite('Extension State Management', () => {
+    test('should provide access to extension state', async () => {
       // Act
       await activate(mockContext);
 
@@ -486,7 +562,7 @@ describe('Extension Activation and Lifecycle', () => {
       assert.strictEqual(state.isInitialized, true, 'State should indicate initialization');
     });
 
-    it('should indicate initialization status correctly', async () => {
+    test('should indicate initialization status correctly', async () => {
       // Before activation
       assert.strictEqual(isExtensionInitialized(), false, 'Should not be initialized before activation');
 
@@ -499,7 +575,7 @@ describe('Extension Activation and Lifecycle', () => {
       assert.strictEqual(isExtensionInitialized(), false, 'Should not be initialized after deactivation');
     });
 
-    it('should track initialization errors', async () => {
+    test('should track initialization errors', async () => {
       // Arrange
       (vscode.chat.createChatParticipant as sinon.SinonStub).throws(new Error('Test error'));
 

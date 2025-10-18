@@ -14,7 +14,8 @@ import {
   DefaultToolFilter,
   DefaultDelegationEngine,
   ErrorHandler,
-  SystemPromptBuilder
+  SystemPromptBuilder,
+  EntryAgentManager
 } from './services';
 import { 
   CompatibilityChecker,
@@ -43,6 +44,7 @@ interface ExtensionState {
   chatParticipant: MultiAgentChatParticipant;
   errorHandler: ErrorHandler;
   degradationManager: GracefulDegradationManager;
+  entryAgentManager: EntryAgentManager;
   isInitialized: boolean;
   initializationError?: Error;
   compatibilityMode: boolean;
@@ -343,6 +345,9 @@ async function initializeExtension(
     // Initialize system prompt builder
     const systemPromptBuilder = new SystemPromptBuilder();
     
+    // Initialize entry agent manager
+    const entryAgentManager = new EntryAgentManager();
+    
     // Initialize agent engine
     const agentEngine = new DefaultAgentEngine(toolFilter, systemPromptBuilder);
     
@@ -386,6 +391,7 @@ async function initializeExtension(
       chatParticipant,
       errorHandler,
       degradationManager,
+      entryAgentManager,
       isInitialized: true,
       compatibilityMode
     };
@@ -636,11 +642,22 @@ function registerCommands(context: vscode.ExtensionContext, state: ExtensionStat
         const allToolNames = state.toolFilter.getAllToolNames();
         const toolCount = allToolNames.length;
         
+        // Get entry agent status
+        let entryAgentInfo = '';
+        try {
+          const config = await state.configurationManager.loadConfiguration();
+          const entryAgentStatus = await state.entryAgentManager.getEntryAgentStatus(config);
+          entryAgentInfo = `• Entry Agent: ${entryAgentStatus.resolved || 'None'} ${entryAgentStatus.usedFallback ? '(fallback)' : ''}`;
+        } catch (error) {
+          entryAgentInfo = '• Entry Agent: Error loading status';
+        }
+        
         const statusMessage = [
           `Multi-Agent Extension Status:`,
           `• Initialized: ${state.isInitialized ? '✅' : '❌'}`,
           `• Compatibility Mode: ${state.compatibilityMode ? '⚠️ Yes' : '✅ No'}`,
           `• Chat Participant: ${isRegistered ? '✅ Registered' : '❌ Not Registered'}`,
+          entryAgentInfo,
           `• Available Tools: ${toolCount} (${toolCount > 0 ? allToolNames.slice(0, 5).join(', ') + (toolCount > 5 ? '...' : '') : 'None'})`,
           `• Active Delegations: ${delegationStats.active}`,
           `• Active Conversations: ${conversationStats.active}`,
@@ -659,6 +676,7 @@ function registerCommands(context: vscode.ExtensionContext, state: ExtensionStat
         if (disabledFeatures.length > 0) {
           actions.unshift('Check Compatibility');
         }
+        actions.unshift('Entry Agent Status');
         
         const selection = await vscode.window.showInformationMessage(
           statusMessage, 
@@ -672,6 +690,8 @@ function registerCommands(context: vscode.ExtensionContext, state: ExtensionStat
           vscode.commands.executeCommand('copilot-multi-agent.checkCompatibility');
         } else if (selection === 'Refresh Tools') {
           vscode.commands.executeCommand('copilot-multi-agent.refreshTools');
+        } else if (selection === 'Entry Agent Status') {
+          vscode.commands.executeCommand('copilot-multi-agent.showEntryAgentStatus');
         }
       } catch (error) {
         console.error('Error showing status:', error);
@@ -809,6 +829,59 @@ function registerCommands(context: vscode.ExtensionContext, state: ExtensionStat
     }
   );
 
+  // Command: Show entry agent status
+  const showEntryAgentStatusCommand = vscode.commands.registerCommand(
+    'copilot-multi-agent.showEntryAgentStatus',
+    async () => {
+      try {
+        console.log('Getting entry agent status...');
+        
+        // Load current configuration
+        const config = await state.configurationManager.loadConfiguration();
+        
+        // Get entry agent status
+        const status = await state.entryAgentManager.getEntryAgentStatus(config);
+        
+        const statusMessage = [
+          `Entry Agent Status:`,
+          `• Configured: ${status.configured || 'None'}`,
+          `• Resolved: ${status.resolved || 'None'}`,
+          `• Valid: ${status.isValid ? '✅' : '❌'}`,
+          `• Used Fallback: ${status.usedFallback ? '⚠️ Yes' : '✅ No'}`,
+          `• Available Agents: ${status.availableAgents.length} (${status.availableAgents.join(', ')})`,
+          status.errors.length > 0 ? `• Errors: ${status.errors.join(', ')}` : '',
+          status.warnings.length > 0 ? `• Warnings: ${status.warnings.join(', ')}` : ''
+        ].filter(Boolean).join('\n');
+        
+        const actions = ['Close'];
+        if (!status.isValid) {
+          actions.unshift('Fix Configuration');
+        }
+        if (status.availableAgents.length > 1) {
+          actions.unshift('Change Entry Agent');
+        }
+        
+        const selection = await vscode.window.showInformationMessage(
+          statusMessage,
+          { modal: true },
+          ...actions
+        );
+        
+        if (selection === 'Fix Configuration') {
+          vscode.commands.executeCommand('copilot-multi-agent.validateConfiguration');
+        } else if (selection === 'Change Entry Agent') {
+          vscode.commands.executeCommand('workbench.action.openSettings', 'copilotMultiAgent.entryAgent');
+        }
+        
+      } catch (error) {
+        console.error('Error getting entry agent status:', error);
+        vscode.window.showErrorMessage(
+          `Failed to get entry agent status: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
+      }
+    }
+  );
+
   // Add commands to disposables
   context.subscriptions.push(
     resetConfigCommand,
@@ -818,7 +891,8 @@ function registerCommands(context: vscode.ExtensionContext, state: ExtensionStat
     showCompatibilityReportCommand,
     checkCompatibilityCommand,
     toggleCompatibilityModeCommand,
-    refreshToolsCommand
+    refreshToolsCommand,
+    showEntryAgentStatusCommand
   );
   
   console.log('Extension commands registered successfully');

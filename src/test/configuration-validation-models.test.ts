@@ -13,9 +13,9 @@ import {
   DEFAULT_EXTENSION_CONFIG
 } from '../models/agent-configuration';
 
-describe('ConfigurationValidator', () => {
-  describe('validateAgentName', () => {
-    it('should validate correct agent names', () => {
+suite('ConfigurationValidator', () => {
+  suite('validateAgentName', () => {
+    test('should validate correct agent names', () => {
       const validNames = ['coordinator', 'code-reviewer', 'test_agent', 'Agent123'];
 
       validNames.forEach(name => {
@@ -25,7 +25,7 @@ describe('ConfigurationValidator', () => {
       });
     });
 
-    it('should reject invalid agent names', () => {
+    test('should reject invalid agent names', () => {
       const invalidCases = [
         { name: '', expectedError: 'Agent name cannot be empty' },
         { name: '   ', expectedError: 'Agent name cannot be empty' },
@@ -41,7 +41,7 @@ describe('ConfigurationValidator', () => {
       });
     });
 
-    it('should reject null, undefined, and non-string names', () => {
+    test('should reject null, undefined, and non-string names', () => {
       const invalidValues = [null, undefined, 123, {}, []];
 
       invalidValues.forEach(value => {
@@ -52,8 +52,8 @@ describe('ConfigurationValidator', () => {
     });
   });
 
-  describe('validateDelegationPermissions', () => {
-    it('should validate "all" delegation permissions', () => {
+  suite('validateDelegationPermissions', () => {
+    test('should validate "all" delegation permissions', () => {
       const permissions: DelegationPermissions = { type: 'all' };
       const result = ConfigurationValidator.validateDelegationPermissions(permissions);
 
@@ -61,7 +61,7 @@ describe('ConfigurationValidator', () => {
       assert.strictEqual(result.errors.length, 0);
     });
 
-    it('should validate "none" delegation permissions', () => {
+    test('should validate "none" delegation permissions', () => {
       const permissions: DelegationPermissions = { type: 'none' };
       const result = ConfigurationValidator.validateDelegationPermissions(permissions);
 
@@ -69,7 +69,7 @@ describe('ConfigurationValidator', () => {
       assert.strictEqual(result.errors.length, 0);
     });
 
-    it('should validate "specific" delegation permissions with valid agents', () => {
+    test('should validate "specific" delegation permissions with valid agents', () => {
       const permissions: DelegationPermissions = {
         type: 'specific',
         agents: ['agent1', 'agent2']
@@ -80,7 +80,7 @@ describe('ConfigurationValidator', () => {
       assert.strictEqual(result.errors.length, 0);
     });
 
-    it('should reject invalid delegation permission types', () => {
+    test('should reject invalid delegation permission types', () => {
       const invalidPermissions = [
         { type: 'invalid' },
         { type: '' },
@@ -95,7 +95,7 @@ describe('ConfigurationValidator', () => {
       });
     });
 
-    it('should reject specific permissions without agents array', () => {
+    test('should reject specific permissions without agents array', () => {
       const permissions = { type: 'specific' };
       const result = ConfigurationValidator.validateDelegationPermissions(permissions);
 
@@ -103,7 +103,7 @@ describe('ConfigurationValidator', () => {
       assert.ok(result.errors.includes('Specific delegation permissions must include an agents array'));
     });
 
-    it('should reject specific permissions with invalid agents', () => {
+    test('should reject specific permissions with invalid agents', () => {
       const permissions = {
         type: 'specific',
         agents: ['valid-agent', '', null, 123]
@@ -116,19 +116,19 @@ describe('ConfigurationValidator', () => {
       assert.ok(result.errors.some(error => error.includes('Agent at index 3 must be a non-empty string')));
     });
 
-    it('should reject null or non-object permissions', () => {
+    test('should reject null or non-object permissions', () => {
       const invalidValues = [null, undefined, 'string', 123, []];
 
       invalidValues.forEach(value => {
         const result = ConfigurationValidator.validateDelegationPermissions(value);
         assert.strictEqual(result.isValid, false);
-        assert.ok(result.errors.includes('Delegation permissions must be an object'));
+        assert.ok(result.errors.some(error => error.includes('Delegation permissions must be an object')));
       });
     });
   });
 
-  describe('validateToolPermissions', () => {
-    it('should validate "all" tool permissions', () => {
+  suite('validateToolPermissions', () => {
+    test('should validate "all" tool permissions', () => {
       const permissions: ToolPermissions = { type: 'all' };
       const result = ConfigurationValidator.validateToolPermissions(permissions);
 
@@ -136,7 +136,7 @@ describe('ConfigurationValidator', () => {
       assert.strictEqual(result.errors.length, 0);
     });
 
-    it('should validate "none" tool permissions', () => {
+    test('should validate "none" tool permissions', () => {
       const permissions: ToolPermissions = { type: 'none' };
       const result = ConfigurationValidator.validateToolPermissions(permissions);
 
@@ -144,7 +144,7 @@ describe('ConfigurationValidator', () => {
       assert.strictEqual(result.errors.length, 0);
     });
 
-    it('should validate "specific" tool permissions with valid tools', () => {
+    test('should validate "specific" tool permissions with valid tools', () => {
       const permissions: ToolPermissions = {
         type: 'specific',
         tools: ['delegateWork', 'reportOut']
@@ -155,7 +155,7 @@ describe('ConfigurationValidator', () => {
       assert.strictEqual(result.errors.length, 0);
     });
 
-    it('should reject invalid tool permission types', () => {
+    test('should reject invalid tool permission types', () => {
       const invalidPermissions = [
         { type: 'invalid' },
         { type: '' },
@@ -170,7 +170,7 @@ describe('ConfigurationValidator', () => {
       });
     });
 
-    it('should reject specific permissions without tools array', () => {
+    test('should reject specific permissions without tools array', () => {
       const permissions = { type: 'specific' };
       const result = ConfigurationValidator.validateToolPermissions(permissions);
 
@@ -178,7 +178,7 @@ describe('ConfigurationValidator', () => {
       assert.ok(result.errors.includes('Specific tool permissions must include a tools array'));
     });
 
-    it('should reject specific permissions with invalid tools', () => {
+    test('should reject specific permissions with invalid tools', () => {
       const permissions = {
         type: 'specific',
         tools: ['validTool', '', null, 123]
@@ -192,7 +192,7 @@ describe('ConfigurationValidator', () => {
     });
   });
 
-  describe('validateAgentConfiguration', () => {
+  suite('validateAgentConfiguration', () => {
     const validAgent: AgentConfiguration = {
       name: 'test-agent',
       systemPrompt: 'You are a test agent',
@@ -202,14 +202,14 @@ describe('ConfigurationValidator', () => {
       toolPermissions: { type: 'all' }
     };
 
-    it('should validate a complete valid agent configuration', () => {
+    test('should validate a complete valid agent configuration', () => {
       const result = ConfigurationValidator.validateAgentConfiguration(validAgent);
 
       assert.strictEqual(result.isValid, true);
       assert.strictEqual(result.errors.length, 0);
     });
 
-    it('should reject agent configuration with missing required fields', () => {
+    test('should reject agent configuration with missing required fields', () => {
       const requiredFields = ['name', 'systemPrompt', 'description', 'useFor'];
 
       requiredFields.forEach(field => {
@@ -222,7 +222,7 @@ describe('ConfigurationValidator', () => {
       });
     });
 
-    it('should reject agent configuration with empty string fields', () => {
+    test('should reject agent configuration with empty string fields', () => {
       const stringFields = ['name', 'systemPrompt', 'description', 'useFor'];
 
       stringFields.forEach(field => {
@@ -234,7 +234,7 @@ describe('ConfigurationValidator', () => {
       });
     });
 
-    it('should reject agent configuration with invalid permissions', () => {
+    test('should reject agent configuration with invalid permissions', () => {
       const invalidAgent = {
         ...validAgent,
         delegationPermissions: { type: 'invalid' },
@@ -247,18 +247,18 @@ describe('ConfigurationValidator', () => {
       assert.ok(result.errors.includes('Tool permissions type must be "all", "none", or "specific"'));
     });
 
-    it('should reject null or non-object configurations', () => {
+    test('should reject null or non-object configurations', () => {
       const invalidValues = [null, undefined, 'string', 123, []];
 
       invalidValues.forEach(value => {
         const result = ConfigurationValidator.validateAgentConfiguration(value);
         assert.strictEqual(result.isValid, false);
-        assert.ok(result.errors.includes('Agent configuration must be an object'));
+        assert.ok(result.errors.some(error => error.includes('Agent configuration must be an object')));
       });
     });
   });
 
-  describe('validateEntryAgent', () => {
+  suite('validateEntryAgent', () => {
     const agents: AgentConfiguration[] = [
       {
         name: 'coordinator',
@@ -278,21 +278,21 @@ describe('ConfigurationValidator', () => {
       }
     ];
 
-    it('should validate existing entry agent', () => {
+    test('should validate existing entry agent', () => {
       const result = ConfigurationValidator.validateEntryAgent('coordinator', agents);
 
       assert.strictEqual(result.isValid, true);
       assert.strictEqual(result.errors.length, 0);
     });
 
-    it('should reject non-existent entry agent', () => {
+    test('should reject non-existent entry agent', () => {
       const result = ConfigurationValidator.validateEntryAgent('non-existent', agents);
 
       assert.strictEqual(result.isValid, false);
       assert.ok(result.errors.includes('Entry agent "non-existent" does not exist in the agents configuration'));
     });
 
-    it('should reject empty or invalid entry agent names', () => {
+    test('should reject empty or invalid entry agent names', () => {
       const invalidValues = ['', '   ', null, undefined, 123];
 
       invalidValues.forEach(value => {
@@ -306,7 +306,7 @@ describe('ConfigurationValidator', () => {
     });
   });
 
-  describe('validateAndGetEntryAgent', () => {
+  suite('validateAndGetEntryAgent', () => {
     const agents: AgentConfiguration[] = [
       {
         name: 'coordinator',
@@ -326,7 +326,7 @@ describe('ConfigurationValidator', () => {
       }
     ];
 
-    it('should return specified valid entry agent', () => {
+    test('should return specified valid entry agent', () => {
       const result = ConfigurationValidator.validateAndGetEntryAgent('specialist', agents);
 
       assert.strictEqual(result.isValid, true);
@@ -334,7 +334,7 @@ describe('ConfigurationValidator', () => {
       assert.strictEqual(result.entryAgent, 'specialist');
     });
 
-    it('should return first agent as default when no entry agent specified', () => {
+    test('should return first agent as default when no entry agent specified', () => {
       const result = ConfigurationValidator.validateAndGetEntryAgent(undefined, agents);
 
       assert.strictEqual(result.isValid, true);
@@ -342,7 +342,7 @@ describe('ConfigurationValidator', () => {
       assert.strictEqual(result.entryAgent, 'coordinator');
     });
 
-    it('should return first agent as default when empty entry agent specified', () => {
+    test('should return first agent as default when empty entry agent specified', () => {
       const result = ConfigurationValidator.validateAndGetEntryAgent('', agents);
 
       assert.strictEqual(result.isValid, true);
@@ -350,7 +350,7 @@ describe('ConfigurationValidator', () => {
       assert.strictEqual(result.entryAgent, 'coordinator');
     });
 
-    it('should fail when no agents are configured', () => {
+    test('should fail when no agents are configured', () => {
       const result = ConfigurationValidator.validateAndGetEntryAgent('coordinator', []);
 
       assert.strictEqual(result.isValid, false);
@@ -358,7 +358,7 @@ describe('ConfigurationValidator', () => {
       assert.strictEqual(result.entryAgent, undefined);
     });
 
-    it('should fail when specified entry agent does not exist', () => {
+    test('should fail when specified entry agent does not exist', () => {
       const result = ConfigurationValidator.validateAndGetEntryAgent('non-existent', agents);
 
       assert.strictEqual(result.isValid, false);
@@ -367,7 +367,7 @@ describe('ConfigurationValidator', () => {
     });
   });
 
-  describe('validateExtensionConfiguration', () => {
+  suite('validateExtensionConfiguration', () => {
     const validConfig: ExtensionConfiguration = {
       entryAgent: 'coordinator',
       agents: [
@@ -390,14 +390,14 @@ describe('ConfigurationValidator', () => {
       ]
     };
 
-    it('should validate a complete valid extension configuration', () => {
+    test('should validate a complete valid extension configuration', () => {
       const result = ConfigurationValidator.validateExtensionConfiguration(validConfig);
 
       assert.strictEqual(result.isValid, true);
       assert.strictEqual(result.errors.length, 0);
     });
 
-    it('should validate configuration without explicit entry agent', () => {
+    test('should validate configuration without explicit entry agent', () => {
       const configWithoutEntryAgent = {
         agents: validConfig.agents
       };
@@ -408,7 +408,7 @@ describe('ConfigurationValidator', () => {
       assert.strictEqual(result.errors.length, 0);
     });
 
-    it('should reject configuration without agents array', () => {
+    test('should reject configuration without agents array', () => {
       const invalidConfig = { entryAgent: 'coordinator' };
 
       const result = ConfigurationValidator.validateExtensionConfiguration(invalidConfig);
@@ -417,7 +417,7 @@ describe('ConfigurationValidator', () => {
       assert.ok(result.errors.includes('Agents must be an array'));
     });
 
-    it('should reject configuration with empty agents array', () => {
+    test('should reject configuration with empty agents array', () => {
       const invalidConfig = { entryAgent: 'coordinator', agents: [] };
 
       const result = ConfigurationValidator.validateExtensionConfiguration(invalidConfig);
@@ -426,7 +426,7 @@ describe('ConfigurationValidator', () => {
       assert.ok(result.errors.includes('At least one agent must be configured'));
     });
 
-    it('should reject configuration with duplicate agent names', () => {
+    test('should reject configuration with duplicate agent names', () => {
       const invalidConfig = {
         entryAgent: 'coordinator',
         agents: [
@@ -441,7 +441,7 @@ describe('ConfigurationValidator', () => {
       assert.ok(result.errors.some(error => error.includes('Duplicate agent name')));
     });
 
-    it('should reject configuration with invalid entry agent', () => {
+    test('should reject configuration with invalid entry agent', () => {
       const invalidConfig = {
         ...validConfig,
         entryAgent: 'non-existent'
@@ -453,7 +453,7 @@ describe('ConfigurationValidator', () => {
       assert.ok(result.errors.includes('Entry agent "non-existent" does not exist in the agents configuration'));
     });
 
-    it('should reject configuration with invalid delegation references', () => {
+    test('should reject configuration with invalid delegation references', () => {
       const invalidConfig = {
         entryAgent: 'coordinator',
         agents: [
@@ -472,19 +472,19 @@ describe('ConfigurationValidator', () => {
       ));
     });
 
-    it('should reject null or non-object configurations', () => {
+    test('should reject null or non-object configurations', () => {
       const invalidValues = [null, undefined, 'string', 123, []];
 
       invalidValues.forEach(value => {
         const result = ConfigurationValidator.validateExtensionConfiguration(value);
         assert.strictEqual(result.isValid, false);
-        assert.ok(result.errors.includes('Extension configuration must be an object'));
+        assert.ok(result.errors.some(error => error.includes('Extension configuration must be an object')));
       });
     });
   });
 
-  describe('getDefaultEntryAgent', () => {
-    it('should return first agent name when agents exist', () => {
+  suite('getDefaultEntryAgent', () => {
+    test('should return first agent name when agents exist', () => {
       const agents: AgentConfiguration[] = [
         {
           name: 'first-agent',
@@ -508,14 +508,14 @@ describe('ConfigurationValidator', () => {
       assert.strictEqual(result, 'first-agent');
     });
 
-    it('should return null when no agents exist', () => {
+    test('should return null when no agents exist', () => {
       const result = ConfigurationValidator.getDefaultEntryAgent([]);
       assert.strictEqual(result, null);
     });
   });
 
-  describe('Default configurations', () => {
-    it('should have valid default coordinator agent', () => {
+  suite('Default configurations', () => {
+    test('should have valid default coordinator agent', () => {
       const result = ConfigurationValidator.validateAgentConfiguration(DEFAULT_COORDINATOR_AGENT);
 
       assert.strictEqual(result.isValid, true);
@@ -523,7 +523,7 @@ describe('ConfigurationValidator', () => {
       assert.strictEqual(DEFAULT_COORDINATOR_AGENT.name, 'coordinator');
     });
 
-    it('should have valid default extension configuration', () => {
+    test('should have valid default extension configuration', () => {
       const result = ConfigurationValidator.validateExtensionConfiguration(DEFAULT_EXTENSION_CONFIG);
 
       assert.strictEqual(result.isValid, true);

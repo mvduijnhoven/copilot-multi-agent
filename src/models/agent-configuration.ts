@@ -82,7 +82,7 @@ export class ConfigurationValidator {
   static validateDelegationPermissions(permissions: any): ValidationResult {
     const errors: string[] = [];
 
-    if (!permissions || typeof permissions !== 'object') {
+    if (!permissions || typeof permissions !== 'object' || Array.isArray(permissions)) {
       errors.push('Delegation permissions must be an object');
       return { isValid: false, errors };
     }
@@ -117,7 +117,7 @@ export class ConfigurationValidator {
   static validateToolPermissions(permissions: any): ValidationResult {
     const errors: string[] = [];
 
-    if (!permissions || typeof permissions !== 'object') {
+    if (!permissions || typeof permissions !== 'object' || Array.isArray(permissions)) {
       errors.push('Tool permissions must be an object');
       return { isValid: false, errors };
     }
@@ -152,7 +152,7 @@ export class ConfigurationValidator {
   static validateAgentConfiguration(config: any): ValidationResult {
     const errors: string[] = [];
 
-    if (!config || typeof config !== 'object') {
+    if (!config || typeof config !== 'object' || Array.isArray(config)) {
       errors.push('Agent configuration must be an object');
       return { isValid: false, errors };
     }
@@ -191,12 +191,12 @@ export class ConfigurationValidator {
   static validateEntryAgent(entryAgent: string, agents: AgentConfiguration[]): ValidationResult {
     const errors: string[] = [];
 
-    if (!entryAgent || typeof entryAgent !== 'string') {
+    if (typeof entryAgent !== 'string') {
       errors.push('Entry agent must be a non-empty string');
       return { isValid: false, errors };
     }
 
-    if (entryAgent.trim().length === 0) {
+    if (!entryAgent || entryAgent.trim().length === 0) {
       errors.push('Entry agent cannot be empty');
       return { isValid: false, errors };
     }
@@ -258,7 +258,7 @@ export class ConfigurationValidator {
   static validateExtensionConfiguration(config: any): ValidationResult {
     const errors: string[] = [];
 
-    if (!config || typeof config !== 'object') {
+    if (!config || typeof config !== 'object' || Array.isArray(config)) {
       errors.push('Extension configuration must be an object');
       return { isValid: false, errors };
     }

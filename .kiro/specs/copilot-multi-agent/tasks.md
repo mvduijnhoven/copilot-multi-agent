@@ -27,7 +27,7 @@
     - Write integration tests for settings UI functionality
     - _Requirements: 5.1, 5.2, 5.3, 10.1, 10.2_
 
-- [x] 2.4 Implement entry agent management
+  - [x] 2.4 Implement entry agent management
     - Create EntryAgentManager class to handle entry agent selection and validation
     - Implement methods to get entry agent, validate entry agent configuration, and provide fallback logic
     - Add entry agent resolution with proper error handling when configured agent is not found
@@ -88,14 +88,14 @@
     - _Requirements: 7.3, 7.4, 8.4_
 
 - [x] 6. Implement chat participant integration
-  - [-] 6.1 Create multi-agent chat participant
+  - [x] 6.1 Create multi-agent chat participant
     - Implement MultiAgentChatParticipant class extending VS Code ChatParticipant
     - Add chat participant registration and lifecycle management
     - Implement request routing to entry agent with proper context handling and fallback logic
     - Write integration tests for chat participant registration and basic functionality
     - _Requirements: 4.1, 4.2, 10.3, 10.5, 11.1_
 
-  - [ ] 6.2 Integrate entry agent execution
+  - [x] 6.2 Integrate entry agent execution
     - Connect chat participant to entry agent with configured system prompt
     - Implement tool filtering for entry agent based on permissions
     - Add delegation tool provisioning when delegation is allowed
@@ -145,7 +145,7 @@
     - _Requirements: 10.2, 10.4, 10.5, 6.5_
 
 - [x] 9. Create extension activation and lifecycle management
-  - [-] 9.1 Update extension activation logic
+  - [x] 9.1 Update extension activation logic
     - Modify extension.ts to initialize multi-agent system on activation with entry agent support
     - Add proper extension context management and cleanup
     - Implement configuration loading and chat participant registration with entry agent resolution
