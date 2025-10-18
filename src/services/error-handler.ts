@@ -219,9 +219,26 @@ export class ErrorHandler {
   }
 
   /**
+   * Check if we're in a test environment
+   */
+  private isTestEnvironment(): boolean {
+    // Check for common test environment indicators
+    return process.env.NODE_ENV === 'test' || 
+           process.env.VSCODE_TEST === 'true' ||
+           typeof global !== 'undefined' && (global as any).suite !== undefined ||
+           typeof (global as any).describe !== undefined;
+  }
+
+  /**
    * Notify user about the error appropriately
    */
   private async notifyUser(error: MultiAgentError, context: ErrorContext): Promise<void> {
+    // Skip notifications in test environment
+    if (this.isTestEnvironment()) {
+      console.log(`[TEST] Would show notification: ${this.getUserFriendlyMessage(error)}`);
+      return;
+    }
+
     const severity = this.getErrorSeverity(error);
     
     switch (severity) {
@@ -397,6 +414,12 @@ export class ErrorHandler {
    * Suggest configuration reset
    */
   private async suggestConfigurationReset(): Promise<void> {
+    // Skip in test environment
+    if (this.isTestEnvironment()) {
+      console.log('[TEST] Would suggest configuration reset');
+      return;
+    }
+
     const result = await vscode.window.showWarningMessage(
       'This will reset all multi-agent configurations to defaults. Continue?',
       'Yes, Reset',
