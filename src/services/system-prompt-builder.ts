@@ -47,6 +47,11 @@ export class SystemPromptBuilder implements ISystemPromptBuilder {
     agentName: string,
     configuration: ExtensionConfiguration
   ): DelegationTarget[] {
+    // Handle null or invalid configuration
+    if (!configuration || !configuration.agents) {
+      return [];
+    }
+    
     // Find the agent configuration
     const agentConfig = this.findAgentConfiguration(agentName, configuration);
     
@@ -114,6 +119,9 @@ When using the delegateWork tool, use one of these agent names: ${agentNames}`;
     agentName: string,
     configuration: ExtensionConfiguration
   ): AgentConfiguration | null {
+    if (!configuration || !configuration.agents) {
+      return null;
+    }
     return configuration.agents.find(agent => agent.name === agentName) || null;
   }
 
@@ -125,6 +133,11 @@ When using the delegateWork tool, use one of these agent names: ${agentNames}`;
     configuration: ExtensionConfiguration
   ): DelegationTarget[] {
     const targets: DelegationTarget[] = [];
+    
+    // Handle null or invalid configuration
+    if (!configuration || !configuration.agents) {
+      return targets;
+    }
     
     // Add all agents except current one
     configuration.agents.forEach(agent => {

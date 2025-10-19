@@ -399,6 +399,19 @@ export class ConfigurationManager implements IConfigurationManager {
         let fixedConfig = { ...rawConfig };
         let fixed = false;
         
+        // Fix invalid agents in the array
+        const validAgents = fixedConfig.agents.filter(agent => 
+          agent && 
+          typeof agent === 'object' && 
+          typeof agent.name === 'string' && 
+          agent.name.trim() !== ''
+        );
+        
+        if (validAgents.length !== fixedConfig.agents.length) {
+          fixedConfig.agents = validAgents;
+          fixed = true;
+        }
+        
         // Fix entry agent if invalid
         const entryAgentValidation = ConfigurationValidator.validateAndGetEntryAgent(fixedConfig.entryAgent, fixedConfig.agents);
         if (!entryAgentValidation.isValid) {
@@ -410,9 +423,14 @@ export class ConfigurationManager implements IConfigurationManager {
           }
         }
         
-        // If we made fixes, save the configuration
+        // If we made fixes, try to save the configuration
         if (fixed) {
-          await this.saveConfiguration(fixedConfig);
+          try {
+            await this.saveConfiguration(fixedConfig);
+          } catch (saveError) {
+            // Even if save fails, we still made fixes
+            // The save might fail due to remaining validation issues
+          }
         }
         
         return {

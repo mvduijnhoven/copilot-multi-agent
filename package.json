@@ -267,6 +267,7 @@
     "lint:check": "eslint src",
     "test": "vscode-test",
     "test:unit": "npm run compile-tests && vscode-test --run",
+    "test:simple": "npm run compile-tests && vscode-test --config .vscode-test-simple.mjs",
     "clean": "rimraf out dist *.vsix",
     "build": "npm run clean && npm run package",
     "build:check": "node scripts/build-check.js",

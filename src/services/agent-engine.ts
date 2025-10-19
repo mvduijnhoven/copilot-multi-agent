@@ -62,6 +62,15 @@ export class DefaultAgentEngine implements AgentEngine {
    */
   async initializeAgent(config: AgentConfiguration, extensionConfig?: ExtensionConfiguration): Promise<AgentExecutionContext> {
     try {
+      // Validate configuration
+      if (!config) {
+        throw new AgentExecutionError('Agent configuration is required', 'unknown');
+      }
+      
+      if (!config.name) {
+        throw new AgentExecutionError('Agent name is required', 'unknown');
+      }
+      
       // Generate unique conversation ID
       const conversationId = uuidv4();
       
@@ -100,9 +109,10 @@ export class DefaultAgentEngine implements AgentEngine {
 
       return context;
     } catch (error) {
+      const agentName = config?.name || 'unknown';
       throw new AgentExecutionError(
-        `Failed to initialize agent "${config.name}": ${error instanceof Error ? error.message : 'Unknown error'}`,
-        config.name,
+        `Failed to initialize agent "${agentName}": ${error instanceof Error ? error.message : 'Unknown error'}`,
+        agentName,
         { originalError: error }
       );
     }
@@ -323,7 +333,19 @@ export class DefaultAgentEngine implements AgentEngine {
    * Gets delegation chain for an agent to detect circular delegation
    */
   getDelegationChain(agentName: string): string[] {
-    const context = this.activeContexts.get(agentName);
+    // First try to find by exact agent name
+    let context = this.activeContexts.get(agentName);
+    
+    // If not found, look for child agents with this name
+    if (!context) {
+      for (const [key, ctx] of this.activeContexts.entries()) {
+        if (ctx.agentName === agentName) {
+          context = ctx;
+          break;
+        }
+      }
+    }
+    
     return context ? [...context.delegationChain, context.agentName] : [];
   }
 

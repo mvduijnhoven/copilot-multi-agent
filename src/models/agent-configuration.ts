@@ -202,7 +202,7 @@ export class ConfigurationValidator {
     }
 
     // Check if entry agent exists in agents array
-    const agentExists = agents.some(agent => agent.name === entryAgent);
+    const agentExists = agents.some(agent => agent && agent.name === entryAgent);
     if (!agentExists) {
       errors.push(`Entry agent "${entryAgent}" does not exist in the agents configuration`);
     }

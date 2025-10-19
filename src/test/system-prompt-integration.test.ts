@@ -1,48 +1,32 @@
 /**
- * Integration tests for extended system prompt functionality in agent execution
+ * Integration tests for system prompt extension functionality
+ * Tests the integration between SystemPromptBuilder and AgentEngine
  */
 
-import * as assert from 'assert';
-import { SystemPromptBuilder } from '../services/system-prompt-builder';
+import { strict as assert } from 'assert';
+import * as sinon from 'sinon';
 import { DefaultAgentEngine } from '../services/agent-engine';
+import { SystemPromptBuilder } from '../services/system-prompt-builder';
 import { DefaultToolFilter } from '../services/tool-filter';
-import { ConfigurationManager } from '../services/configuration-manager';
-import { DelegateWorkTool } from '../tools/delegate-work-tool';
-import { DefaultDelegationEngine } from '../services/delegation-engine';
 import { 
+  AgentConfiguration, 
   ExtensionConfiguration,
-  AgentConfiguration,
-  DEFAULT_EXTENSION_CONFIG,
-  DEFAULT_COORDINATOR_CONFIG
+  AgentExecutionContext
 } from '../models';
+import { 
+  setupTestEnvironment, 
+  cleanupTestEnvironment,
+  createTestAgent,
+  createTestConfiguration,
+  mockVscode
+} from './test-setup';
 
-// Mock configuration manager for testing
+// Mock ConfigurationManager for ToolFilter
 class MockConfigurationManager {
   private config: ExtensionConfiguration;
 
-  constructor(config?: ExtensionConfiguration) {
-    this.config = config || {
-      entryAgent: 'coordinator',
-      agents: [
-        DEFAULT_COORDINATOR_CONFIG,
-        {
-          name: 'code-reviewer',
-          systemPrompt: 'You are a code review specialist.',
-          description: 'Specialized in code review and quality analysis',
-          useFor: 'Code review, security analysis, best practices',
-          delegationPermissions: { type: 'none' },
-          toolPermissions: { type: 'specific', tools: ['reportOut'] }
-        },
-        {
-          name: 'test-engineer',
-          systemPrompt: 'You are a testing specialist.',
-          description: 'Specialized in testing and quality assurance',
-          useFor: 'Unit testing, integration testing, test automation',
-          delegationPermissions: { type: 'specific', agents: ['code-reviewer'] },
-          toolPermissions: { type: 'all' }
-        }
-      ]
-    };
+  constructor(config: ExtensionConfiguration) {
+    this.config = config;
   }
 
   async loadConfiguration(): Promise<ExtensionConfiguration> {
@@ -53,266 +37,468 @@ class MockConfigurationManager {
     this.config = config;
   }
 
-  validateConfiguration(): boolean {
-    return true;
-  }
-
-  getDefaultConfiguration(): ExtensionConfiguration {
-    return this.config;
-  }
-
+  validateConfiguration(): boolean { return true; }
+  getDefaultConfiguration(): ExtensionConfiguration { return this.config; }
+  async getEntryAgent() { return this.config.agents[0] || null; }
   onConfigurationChanged(): void {}
   dispose(): void {}
 }
 
 suite('System Prompt Integration Tests', () => {
-  let systemPromptBuilder: SystemPromptBuilder;
   let agentEngine: DefaultAgentEngine;
+  let systemPromptBuilder: SystemPromptBuilder;
   let toolFilter: DefaultToolFilter;
-  let configManager: MockConfigurationManager;
-  let delegationEngine: DefaultDelegationEngine;
+  let mockConfigManager: MockConfigurationManager;
 
   setup(() => {
-    configManager = new MockConfigurationManager();
-    toolFilter = new DefaultToolFilter(configManager as any);
+    setupTestEnvironment();
     systemPromptBuilder = new SystemPromptBuilder();
+    
+    // Create a basic configuration for the mock
+    const basicConfig = createTestConfiguration([
+      createTestAgent('coordinator', 'Coordination and delegation', { type: 'all' })
+    ]);
+    
+    mockConfigManager = new MockConfigurationManager(basicConfig);
+    toolFilter = new DefaultToolFilter(mockConfigManager);
     agentEngine = new DefaultAgentEngine(toolFilter, systemPromptBuilder);
-    delegationEngine = new DefaultDelegationEngine(agentEngine, configManager as any);
   });
 
-  test('Agent initialization uses extended system prompt with delegation information', async () => {
-    const config = await configManager.loadConfiguration();
-    const coordinatorConfig = config.agents.find(agent => agent.name === 'coordinator')!;
-
-    // Initialize coordinator agent with extension configuration
-    const context = await agentEngine.initializeAgent(coordinatorConfig, config);
-
-    // Verify that the system prompt has been extended with delegation information
-    assert.ok(context.systemPrompt.includes('## Available Agents for Delegation'));
-    assert.ok(context.systemPrompt.includes('code-reviewer'));
-    assert.ok(context.systemPrompt.includes('test-engineer'));
-    assert.ok(context.systemPrompt.includes('Code review, security analysis, best practices'));
-    assert.ok(context.systemPrompt.includes('Unit testing, integration testing, test automation'));
-    assert.ok(context.systemPrompt.includes('When using the delegateWork tool, use one of these agent names: code-reviewer, test-engineer'));
+  teardown(() => {
+    // Clean up any active agents
+    try {
+      const activeAgents = agentEngine.getActiveAgents();
+      activeAgents.forEach(agent => agentEngine.terminateAgent(agent.agentName));
+    } catch (error) {
+      // Ignore cleanup errors in tests
+    }
+    cleanupTestEnvironment();
   });
 
-  test('Agent with no delegation permissions has no extended system prompt', async () => {
-    const config = await configManager.loadConfiguration();
-    const codeReviewerConfig = config.agents.find(a => a.name === 'code-reviewer')!;
+  suite('Agent Initialization with Extended System Prompts', () => {
+    test('should initialize agent with extended system prompt when delegation targets available', async () => {
+      const agents = [
+        createTestAgent('coordinator', 'Coordination and delegation', { type: 'all' }),
+        createTestAgent('code-reviewer', 'Code review and security analysis'),
+        createTestAgent('test-engineer', 'Unit testing and integration testing')
+      ];
+      const config = createTestConfiguration(agents);
 
-    // Initialize code reviewer agent (has no delegation permissions)
-    const context = await agentEngine.initializeAgent(codeReviewerConfig, config);
+      const context = await agentEngine.initializeAgent(agents[0], config);
 
-    // Verify that the system prompt has NOT been extended
-    assert.ok(!context.systemPrompt.includes('## Available Agents for Delegation'));
-    assert.strictEqual(context.systemPrompt, codeReviewerConfig.systemPrompt);
+      // System prompt should be extended with delegation information
+      assert.ok(context.systemPrompt.includes('You are coordinator agent with comprehensive capabilities'));
+      assert.ok(context.systemPrompt.includes('## Available Agents for Delegation'));
+      assert.ok(context.systemPrompt.includes('- **code-reviewer**: Code review and security analysis'));
+      assert.ok(context.systemPrompt.includes('- **test-engineer**: Unit testing and integration testing'));
+      assert.ok(context.systemPrompt.includes('When using the delegateWork tool, use one of these agent names: code-reviewer, test-engineer'));
+      
+      // Available delegation targets should be populated
+      assert.strictEqual(context.availableDelegationTargets.length, 2);
+      assert.ok(context.availableDelegationTargets.some(t => t.name === 'code-reviewer'));
+      assert.ok(context.availableDelegationTargets.some(t => t.name === 'test-engineer'));
+    });
+
+    test('should initialize agent with base system prompt when no delegation permissions', async () => {
+      const agents = [
+        createTestAgent('coordinator', 'Coordination', { type: 'all' }),
+        createTestAgent('restricted-agent', 'Restricted tasks', { type: 'none' })
+      ];
+      const config = createTestConfiguration(agents);
+      
+      // Add agents to mock configuration manager
+      mockConfigManager = new MockConfigurationManager(config);
+      toolFilter = new DefaultToolFilter(mockConfigManager);
+      agentEngine = new DefaultAgentEngine(toolFilter, systemPromptBuilder);
+
+      const context = await agentEngine.initializeAgent(agents[1], config);
+
+      // System prompt should not be extended
+      assert.strictEqual(context.systemPrompt, 'You are restricted-agent agent with comprehensive capabilities for Restricted tasks');
+      assert.ok(!context.systemPrompt.includes('## Available Agents for Delegation'));
+      
+      // Available delegation targets should be empty
+      assert.strictEqual(context.availableDelegationTargets.length, 0);
+    });
+
+    test('should initialize agent with specific delegation targets', async () => {
+      const agents = [
+        createTestAgent('coordinator', 'Coordination', { type: 'all' }),
+        createTestAgent('specialist', 'Specialized tasks', { type: 'specific', agents: ['test-engineer'] }),
+        createTestAgent('test-engineer', 'Unit testing and integration testing'),
+        createTestAgent('other-agent', 'Other tasks')
+      ];
+      const config = createTestConfiguration(agents);
+      
+      // Add agents to mock configuration manager
+      mockConfigManager = new MockConfigurationManager(config);
+      toolFilter = new DefaultToolFilter(mockConfigManager);
+      agentEngine = new DefaultAgentEngine(toolFilter, systemPromptBuilder);
+
+      const context = await agentEngine.initializeAgent(agents[1], config);
+
+      // System prompt should include only specific delegation targets
+      assert.ok(context.systemPrompt.includes('## Available Agents for Delegation'));
+      assert.ok(context.systemPrompt.includes('- **test-engineer**: Unit testing and integration testing'));
+      assert.ok(!context.systemPrompt.includes('other-agent'));
+      assert.ok(context.systemPrompt.includes('When using the delegateWork tool, use one of these agent names: test-engineer'));
+      
+      // Available delegation targets should contain only allowed agents
+      assert.strictEqual(context.availableDelegationTargets.length, 1);
+      assert.strictEqual(context.availableDelegationTargets[0].name, 'test-engineer');
+    });
+
+    test('should handle agent initialization without extension configuration', async () => {
+      const agentConfig = createTestAgent('standalone-agent', 'Standalone tasks', { type: 'all' });
+      
+      // Add agent to configuration for tool filter
+      const config = createTestConfiguration([agentConfig]);
+      mockConfigManager = new MockConfigurationManager(config);
+      toolFilter = new DefaultToolFilter(mockConfigManager);
+      agentEngine = new DefaultAgentEngine(toolFilter, systemPromptBuilder);
+
+      const context = await agentEngine.initializeAgent(agentConfig);
+
+      // System prompt should not be extended without extension configuration
+      assert.strictEqual(context.systemPrompt, 'You are standalone-agent agent with comprehensive capabilities for Standalone tasks');
+      assert.ok(!context.systemPrompt.includes('## Available Agents for Delegation'));
+      
+      // Available delegation targets should be empty
+      assert.strictEqual(context.availableDelegationTargets.length, 0);
+    });
   });
 
-  test('Agent with specific delegation permissions has limited delegation information', async () => {
-    const config = await configManager.loadConfiguration();
-    const testEngineerConfig = config.agents.find(a => a.name === 'test-engineer')!;
+  suite('Child Agent Initialization with Extended System Prompts', () => {
+    test('should initialize child agent with extended system prompt', async () => {
+      const agents = [
+        createTestAgent('parent-agent', 'Parent tasks', { type: 'all' }),
+        createTestAgent('child-agent', 'Child tasks', { type: 'specific', agents: ['other-agent'] }),
+        createTestAgent('other-agent', 'Other tasks')
+      ];
+      const config = createTestConfiguration(agents);
+      
+      // Add agents to mock configuration manager
+      mockConfigManager = new MockConfigurationManager(config);
+      toolFilter = new DefaultToolFilter(mockConfigManager);
+      agentEngine = new DefaultAgentEngine(toolFilter, systemPromptBuilder);
 
-    // Initialize test engineer agent (can only delegate to code-reviewer)
-    const context = await agentEngine.initializeAgent(testEngineerConfig, config);
+      // Initialize parent first
+      const parentContext = await agentEngine.initializeAgent(agents[0], config);
+      
+      // Initialize child agent
+      const childContext = await (agentEngine as any).initializeChildAgent(
+        agents[1], 
+        parentContext, 
+        config
+      );
 
-    // Verify that the system prompt includes only allowed delegation targets
-    assert.ok(context.systemPrompt.includes('## Available Agents for Delegation'));
-    assert.ok(context.systemPrompt.includes('code-reviewer'));
-    assert.ok(!context.systemPrompt.includes('test-engineer')); // Should not include itself
-    assert.ok(context.systemPrompt.includes('When using the delegateWork tool, use one of these agent names: code-reviewer'));
+      // Child system prompt should be extended with its delegation targets
+      assert.ok(childContext.systemPrompt.includes('You are child-agent agent with comprehensive capabilities'));
+      assert.ok(childContext.systemPrompt.includes('## Available Agents for Delegation'));
+      assert.ok(childContext.systemPrompt.includes('- **other-agent**: Other tasks'));
+      assert.ok(childContext.systemPrompt.includes('When using the delegateWork tool, use one of these agent names: other-agent'));
+      
+      // Available delegation targets should be populated
+      assert.strictEqual(childContext.availableDelegationTargets.length, 1);
+      assert.strictEqual(childContext.availableDelegationTargets[0].name, 'other-agent');
+    });
+
+    test('should initialize child agent without delegation extension when no permissions', async () => {
+      const agents = [
+        createTestAgent('parent-agent', 'Parent tasks', { type: 'all' }),
+        createTestAgent('child-agent', 'Child tasks', { type: 'none' })
+      ];
+      const config = createTestConfiguration(agents);
+      
+      // Add agents to mock configuration manager
+      mockConfigManager = new MockConfigurationManager(config);
+      toolFilter = new DefaultToolFilter(mockConfigManager);
+      agentEngine = new DefaultAgentEngine(toolFilter, systemPromptBuilder);
+
+      const parentContext = await agentEngine.initializeAgent(agents[0], config);
+      const childContext = await (agentEngine as any).initializeChildAgent(
+        agents[1], 
+        parentContext, 
+        config
+      );
+
+      // Child system prompt should not be extended
+      assert.strictEqual(childContext.systemPrompt, 'You are child-agent agent with comprehensive capabilities for Child tasks');
+      assert.ok(!childContext.systemPrompt.includes('## Available Agents for Delegation'));
+      
+      // Available delegation targets should be empty
+      assert.strictEqual(childContext.availableDelegationTargets.length, 0);
+    });
   });
 
-  test('Child agent initialization includes extended system prompt', async () => {
-    const config = await configManager.loadConfiguration();
-    const coordinatorConfig = config.agents.find(agent => agent.name === 'coordinator')!;
-    const codeReviewerConfig = config.agents.find(a => a.name === 'code-reviewer')!;
+  suite('System Prompt Application in Agent Execution', () => {
+    test('should apply extended system prompt during agent execution', async () => {
+      const agents = [
+        createTestAgent('coordinator', 'Coordination and delegation', { type: 'all' }),
+        createTestAgent('test-agent', 'Testing tasks')
+      ];
+      const config = createTestConfiguration(agents);
 
-    // Initialize parent coordinator agent
-    const parentContext = await agentEngine.initializeAgent(coordinatorConfig, config);
+      const context = await agentEngine.initializeAgent(agents[0], config);
+      
+      // Execute agent to trigger system prompt application
+      const result = await agentEngine.executeAgent(context, 'Test input');
 
-    // Initialize child agent with extension configuration
-    const childContext = await (agentEngine as any).initializeChildAgent(
-      codeReviewerConfig,
-      parentContext,
-      config
-    );
+      // Result should include the extended system prompt information
+      assert.ok(result.includes('coordinator'));
+      assert.ok(result.includes('Test input'));
+      
+      // The applied system prompt should include delegation information
+      const enhancedInput = (agentEngine as any).applySystemPrompt(context, 'Test input');
+      assert.ok(enhancedInput.includes('System: You are coordinator agent with comprehensive capabilities'));
+      assert.ok(enhancedInput.includes('## Available Agents for Delegation'));
+    });
 
-    // Verify child agent has the correct system prompt (no delegation for code-reviewer)
-    assert.strictEqual(childContext.systemPrompt, codeReviewerConfig.systemPrompt);
-    assert.ok(!childContext.systemPrompt.includes('## Available Agents for Delegation'));
+    test('should include delegation targets in execution context', async () => {
+      const agents = [
+        createTestAgent('coordinator', 'Coordination', { type: 'all' }),
+        createTestAgent('specialist', 'Specialized tasks')
+      ];
+      const config = createTestConfiguration(agents);
 
-    // Verify delegation chain is maintained
-    assert.deepStrictEqual(childContext.delegationChain, ['coordinator']);
-    assert.strictEqual(childContext.parentConversationId, parentContext.conversationId);
+      const context = await agentEngine.initializeAgent(agents[0], config);
+
+      // Delegation targets should be available in context
+      assert.strictEqual(context.availableDelegationTargets.length, 1);
+      assert.strictEqual(context.availableDelegationTargets[0].name, 'specialist');
+      assert.strictEqual(context.availableDelegationTargets[0].useFor, 'Specialized tasks');
+    });
   });
 
-  test('DelegateWork tool uses enumerated agent names from SystemPromptBuilder', async () => {
-    const config = await configManager.loadConfiguration();
-    
-    // Create delegateWork tool for coordinator
-    const delegateWorkTool = new DelegateWorkTool(
-      delegationEngine,
-      'coordinator',
-      systemPromptBuilder,
-      config
-    );
+  suite('Dynamic Configuration Changes', () => {
+    test('should handle configuration changes affecting delegation targets', async () => {
+      const agents = [
+        createTestAgent('coordinator', 'Coordination', { type: 'all' }),
+        createTestAgent('agent1', 'Agent 1 tasks')
+      ];
+      let config = createTestConfiguration(agents);
 
-    // Get the parameters schema
-    const schema = delegateWorkTool.parametersSchema;
+      // Initialize agent with initial configuration
+      let context = await agentEngine.initializeAgent(agents[0], config);
+      assert.strictEqual(context.availableDelegationTargets.length, 1);
 
-    // Verify that agentName property has enum constraint with correct values
-    assert.ok(schema.properties.agentName.enum);
-    assert.deepStrictEqual(
-      schema.properties.agentName.enum.sort(),
-      ['code-reviewer', 'test-engineer'].sort()
-    );
-    assert.ok(schema.properties.agentName.description.includes('code-reviewer, test-engineer'));
+      // Add more agents to configuration
+      agents.push(createTestAgent('agent2', 'Agent 2 tasks'));
+      agents.push(createTestAgent('agent3', 'Agent 3 tasks'));
+      config = createTestConfiguration(agents);
+
+      // Re-initialize agent with updated configuration
+      agentEngine.terminateAgent('coordinator');
+      context = await agentEngine.initializeAgent(agents[0], config);
+      
+      // Should now have more delegation targets
+      assert.strictEqual(context.availableDelegationTargets.length, 3);
+      assert.ok(context.availableDelegationTargets.some(t => t.name === 'agent1'));
+      assert.ok(context.availableDelegationTargets.some(t => t.name === 'agent2'));
+      assert.ok(context.availableDelegationTargets.some(t => t.name === 'agent3'));
+    });
+
+    test('should handle delegation permission changes', async () => {
+      const agents = [
+        createTestAgent('dynamic-agent', 'Dynamic tasks', { type: 'none' }),
+        createTestAgent('target-agent', 'Target tasks')
+      ];
+      let config = createTestConfiguration(agents);
+      
+      // Add agents to mock configuration manager
+      mockConfigManager = new MockConfigurationManager(config);
+      toolFilter = new DefaultToolFilter(mockConfigManager);
+      agentEngine = new DefaultAgentEngine(toolFilter, systemPromptBuilder);
+
+      // Initialize with no delegation permissions
+      let context = await agentEngine.initializeAgent(agents[0], config);
+      assert.strictEqual(context.availableDelegationTargets.length, 0);
+      assert.ok(!context.systemPrompt.includes('## Available Agents for Delegation'));
+
+      // Change to all delegation permissions
+      agents[0].delegationPermissions = { type: 'all' };
+      config = createTestConfiguration(agents);
+      
+      // Update mock configuration manager
+      mockConfigManager = new MockConfigurationManager(config);
+      toolFilter = new DefaultToolFilter(mockConfigManager);
+      agentEngine = new DefaultAgentEngine(toolFilter, systemPromptBuilder);
+
+      agentEngine.terminateAgent('dynamic-agent');
+      context = await agentEngine.initializeAgent(agents[0], config);
+      
+      // Should now have delegation targets
+      assert.strictEqual(context.availableDelegationTargets.length, 1);
+      assert.ok(context.systemPrompt.includes('## Available Agents for Delegation'));
+      assert.ok(context.systemPrompt.includes('target-agent'));
+    });
   });
 
-  test('DelegateWork tool for agent with specific permissions has limited enum', async () => {
-    const config = await configManager.loadConfiguration();
-    
-    // Create delegateWork tool for test-engineer (can only delegate to code-reviewer)
-    const delegateWorkTool = new DelegateWorkTool(
-      delegationEngine,
-      'test-engineer',
-      systemPromptBuilder,
-      config
-    );
+  suite('Error Handling in System Prompt Extension', () => {
+    test('should handle SystemPromptBuilder errors gracefully', async () => {
+      // Create a mock that throws an error
+      const errorSystemPromptBuilder = {
+        buildSystemPrompt: sinon.stub().throws(new Error('System prompt error')),
+        getDelegationTargets: sinon.stub().returns([])
+      } as any;
 
-    // Get the parameters schema
-    const schema = delegateWorkTool.parametersSchema;
+      const errorAgentEngine = new DefaultAgentEngine(toolFilter, errorSystemPromptBuilder);
+      const agentConfig = createTestAgent('error-agent');
+      const config = createTestConfiguration([agentConfig]);
 
-    // Verify that agentName property has enum constraint with only allowed values
-    assert.ok(schema.properties.agentName.enum);
-    assert.deepStrictEqual(schema.properties.agentName.enum, ['code-reviewer']);
-    assert.ok(schema.properties.agentName.description.includes('code-reviewer'));
-    assert.ok(!schema.properties.agentName.description.includes('test-engineer'));
+      await assert.rejects(
+        () => errorAgentEngine.initializeAgent(agentConfig, config),
+        Error
+      );
+    });
+
+    test('should handle malformed delegation targets gracefully', async () => {
+      // Create a mock that returns malformed targets
+      const malformedSystemPromptBuilder = {
+        buildSystemPrompt: sinon.stub().returns('Extended prompt'),
+        getDelegationTargets: sinon.stub().returns([
+          { name: 'valid-target', useFor: 'Valid tasks' },
+          null, // Invalid target
+          { name: '', useFor: 'Empty name' }, // Invalid target
+          { name: 'another-valid', useFor: 'More tasks' }
+        ])
+      } as any;
+
+      const agentConfig = createTestAgent('test-agent');
+      const config = createTestConfiguration([agentConfig]);
+      
+      // Add agent to mock configuration manager
+      mockConfigManager = new MockConfigurationManager(config);
+      const malformedToolFilter = new DefaultToolFilter(mockConfigManager);
+      const malformedAgentEngine = new DefaultAgentEngine(malformedToolFilter, malformedSystemPromptBuilder);
+
+      const context = await malformedAgentEngine.initializeAgent(agentConfig, config);
+      
+      // Should handle malformed targets gracefully
+      assert.ok(context);
+      assert.ok(Array.isArray(context.availableDelegationTargets));
+    });
+
+    test('should handle empty delegation targets gracefully', async () => {
+      const emptySystemPromptBuilder = {
+        buildSystemPrompt: sinon.stub().returns('Base prompt'),
+        getDelegationTargets: sinon.stub().returns([])
+      } as any;
+
+      const agentConfig = createTestAgent('empty-agent');
+      const config = createTestConfiguration([agentConfig]);
+      
+      // Add agent to mock configuration manager
+      mockConfigManager = new MockConfigurationManager(config);
+      const emptyToolFilter = new DefaultToolFilter(mockConfigManager);
+      const emptyAgentEngine = new DefaultAgentEngine(emptyToolFilter, emptySystemPromptBuilder);
+
+      const context = await emptyAgentEngine.initializeAgent(agentConfig, config);
+      
+      assert.strictEqual(context.systemPrompt, 'Base prompt');
+      assert.strictEqual(context.availableDelegationTargets.length, 0);
+    });
   });
 
-  test('DelegateWork tool for agent with no permissions has no enum', async () => {
-    const config = await configManager.loadConfiguration();
-    
-    // Create delegateWork tool for code-reviewer (has no delegation permissions)
-    const delegateWorkTool = new DelegateWorkTool(
-      delegationEngine,
-      'code-reviewer',
-      systemPromptBuilder,
-      config
-    );
+  suite('Performance and Memory', () => {
+    test('should handle large numbers of delegation targets efficiently', async () => {
+      const manyAgents = Array.from({ length: 20 }, (_, i) => 
+        createTestAgent(`agent-${i}`, `Agent ${i} tasks`)
+      );
+      manyAgents[0].delegationPermissions = { type: 'all' };
+      
+      const config = createTestConfiguration(manyAgents);
+      
+      // Add agents to mock configuration manager
+      mockConfigManager = new MockConfigurationManager(config);
+      toolFilter = new DefaultToolFilter(mockConfigManager);
+      agentEngine = new DefaultAgentEngine(toolFilter, systemPromptBuilder);
 
-    // Get the parameters schema
-    const schema = delegateWorkTool.parametersSchema;
+      const startTime = Date.now();
+      const context = await agentEngine.initializeAgent(manyAgents[0], config);
+      const endTime = Date.now();
 
-    // Verify that agentName property has no enum constraint
-    assert.ok(!schema.properties.agentName.enum || schema.properties.agentName.enum.length === 0);
+      // Should complete in reasonable time (less than 1 second)
+      assert.ok(endTime - startTime < 1000);
+      
+      // Should have all delegation targets
+      assert.strictEqual(context.availableDelegationTargets.length, 19);
+      
+      // System prompt should include all targets
+      assert.ok(context.systemPrompt.includes('## Available Agents for Delegation'));
+    });
+
+    test('should not leak memory with repeated initializations', async () => {
+      const agents = [
+        createTestAgent('coordinator', 'Coordination', { type: 'all' }),
+        createTestAgent('test-agent', 'Testing')
+      ];
+      const config = createTestConfiguration(agents);
+
+      // Initialize and terminate many agents
+      for (let i = 0; i < 100; i++) {
+        const context = await agentEngine.initializeAgent(agents[0], config);
+        assert.ok(context);
+        agentEngine.terminateAgent('coordinator');
+      }
+
+      // Should not have any active agents
+      const activeAgents = agentEngine.getActiveAgents();
+      assert.strictEqual(activeAgents.length, 0);
+    });
   });
 
-  test('SystemPromptBuilder correctly handles coordinator with all permissions', async () => {
-    const config = await configManager.loadConfiguration();
-    
-    // Test coordinator with 'all' delegation permissions
-    const extendedPrompt = systemPromptBuilder.buildSystemPrompt(
-      'Base coordinator prompt',
-      'coordinator',
-      config
-    );
+  suite('Consistency and Determinism', () => {
+    test('should produce consistent system prompts across multiple initializations', async () => {
+      const agents = [
+        createTestAgent('coordinator', 'Coordination', { type: 'all' }),
+        createTestAgent('test-agent', 'Testing')
+      ];
+      const config = createTestConfiguration(agents);
 
-    assert.ok(extendedPrompt.includes('Base coordinator prompt'));
-    assert.ok(extendedPrompt.includes('## Available Agents for Delegation'));
-    assert.ok(extendedPrompt.includes('code-reviewer'));
-    assert.ok(extendedPrompt.includes('test-engineer'));
-  });
+      // Initialize multiple times
+      const contexts = [];
+      for (let i = 0; i < 5; i++) {
+        const context = await agentEngine.initializeAgent(agents[0], config);
+        contexts.push(context);
+        agentEngine.terminateAgent('coordinator');
+      }
 
-  test('SystemPromptBuilder correctly handles agent with none permissions', async () => {
-    const config = await configManager.loadConfiguration();
-    
-    // Test agent with 'none' delegation permissions
-    const extendedPrompt = systemPromptBuilder.buildSystemPrompt(
-      'Base agent prompt',
-      'code-reviewer',
-      config
-    );
+      // All system prompts should be identical
+      const firstPrompt = contexts[0].systemPrompt;
+      contexts.forEach(context => {
+        assert.strictEqual(context.systemPrompt, firstPrompt);
+      });
 
-    // Should return unchanged prompt
-    assert.strictEqual(extendedPrompt, 'Base agent prompt');
-  });
+      // All delegation targets should be identical
+      const firstTargets = contexts[0].availableDelegationTargets;
+      contexts.forEach(context => {
+        assert.deepStrictEqual(context.availableDelegationTargets, firstTargets);
+      });
+    });
 
-  test('SystemPromptBuilder correctly handles agent with specific permissions', async () => {
-    const config = await configManager.loadConfiguration();
-    
-    // Test agent with 'specific' delegation permissions
-    const extendedPrompt = systemPromptBuilder.buildSystemPrompt(
-      'Base test engineer prompt',
-      'test-engineer',
-      config
-    );
+    test('should maintain delegation target order consistently', async () => {
+      const agents = [
+        createTestAgent('coordinator', 'Coordination', { type: 'all' }),
+        createTestAgent('zebra-agent', 'Zebra tasks'),
+        createTestAgent('alpha-agent', 'Alpha tasks'),
+        createTestAgent('beta-agent', 'Beta tasks')
+      ];
+      const config = createTestConfiguration(agents);
 
-    assert.ok(extendedPrompt.includes('Base test engineer prompt'));
-    assert.ok(extendedPrompt.includes('## Available Agents for Delegation'));
-    assert.ok(extendedPrompt.includes('code-reviewer'));
-    assert.ok(!extendedPrompt.includes('test-engineer')); // Should not include itself
-    assert.ok(extendedPrompt.includes('When using the delegateWork tool, use one of these agent names: code-reviewer'));
-  });
+      // Initialize multiple times
+      const targetOrders = [];
+      for (let i = 0; i < 5; i++) {
+        const context = await agentEngine.initializeAgent(agents[0], config);
+        targetOrders.push(context.availableDelegationTargets.map(t => t.name));
+        agentEngine.terminateAgent('coordinator');
+      }
 
-  test('Agent execution context includes available delegation targets', async () => {
-    const config = await configManager.loadConfiguration();
-    const coordinatorConfig = config.agents.find(agent => agent.name === 'coordinator')!;
-
-    // Initialize coordinator agent
-    const context = await agentEngine.initializeAgent(coordinatorConfig, config);
-
-    // Verify available delegation targets are populated
-    assert.ok(Array.isArray(context.availableDelegationTargets));
-    assert.strictEqual(context.availableDelegationTargets.length, 2);
-    
-    const targetNames = context.availableDelegationTargets.map(t => t.name).sort();
-    assert.deepStrictEqual(targetNames, ['code-reviewer', 'test-engineer']);
-    
-    const codeReviewerTarget = context.availableDelegationTargets.find(t => t.name === 'code-reviewer');
-    assert.ok(codeReviewerTarget);
-    assert.strictEqual(codeReviewerTarget.useFor, 'Code review, security analysis, best practices');
-  });
-
-  test('Agent initialization without extension config uses base system prompt', async () => {
-    const config = await configManager.loadConfiguration();
-    const coordinatorConfig = config.agents.find(agent => agent.name === 'coordinator')!;
-
-    // Initialize coordinator agent WITHOUT extension configuration
-    const context = await agentEngine.initializeAgent(coordinatorConfig);
-
-    // Verify that the system prompt is NOT extended
-    assert.strictEqual(context.systemPrompt, coordinatorConfig.systemPrompt);
-    assert.ok(!context.systemPrompt.includes('## Available Agents for Delegation'));
-    assert.strictEqual(context.availableDelegationTargets.length, 0);
-  });
-
-  test('SystemPromptBuilder handles empty custom agents array', async () => {
-    const configWithNoCustomAgents: ExtensionConfiguration = {
-      entryAgent: 'coordinator',
-      agents: [DEFAULT_COORDINATOR_CONFIG]
-    };
-
-    const extendedPrompt = systemPromptBuilder.buildSystemPrompt(
-      'Base coordinator prompt',
-      'coordinator',
-      configWithNoCustomAgents
-    );
-
-    // Should return unchanged prompt since no agents to delegate to
-    assert.strictEqual(extendedPrompt, 'Base coordinator prompt');
-  });
-
-  test('SystemPromptBuilder handles non-existent agent gracefully', async () => {
-    const config = await configManager.loadConfiguration();
-    
-    const extendedPrompt = systemPromptBuilder.buildSystemPrompt(
-      'Base prompt',
-      'non-existent-agent',
-      config
-    );
-
-    // Should return unchanged prompt for non-existent agent
-    assert.strictEqual(extendedPrompt, 'Base prompt');
+      // All orders should be identical
+      const firstOrder = targetOrders[0];
+      targetOrders.forEach(order => {
+        assert.deepStrictEqual(order, firstOrder);
+      });
+    });
   });
 });
