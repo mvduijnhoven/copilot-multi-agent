@@ -143,12 +143,17 @@ export class DefaultDelegationEngine implements DelegationEngine {
       // Get the complete extension configuration for delegation context
       const extensionConfig = await this.configurationManager.loadConfiguration();
       
-      // Initialize the target agent as a child agent
+      // Initialize the target agent as a child agent with model from parent
       const childContext = await this.initializeChildAgent(
         toAgentConfig as AgentConfiguration,
         parentContext,
         extensionConfig
       );
+      
+      // Ensure child context has access to the same model as parent
+      if (parentContext.model && !childContext.model) {
+        childContext.model = parentContext.model;
+      }
 
       // Update the child context with the managed conversation ID
       childContext.conversationId = childConversationId;
@@ -174,27 +179,41 @@ export class DefaultDelegationEngine implements DelegationEngine {
       // Prepare the delegation input
       const delegationInput = this.prepareDelegationInput(workDescription, reportExpectations);
 
-      // Execute the target agent with the delegation input
-      // Note: This is a fire-and-forget operation, the result will come via reportOut
-      this.agentEngine.executeAgent(childContext, delegationInput).catch(error => {
-        // Mark conversation as failed
-        this.conversationManager.markConversationFailed(childContext.conversationId, error);
+      // Execute the target agent using agentic loop for delegated requests
+      try {
+        // Get available tools for the delegated agent
+        const delegatedAgentTools = childContext.availableTools || [];
         
-        // If agent execution fails, reject the delegation promise
-        const promise = this.delegationPromises.get(childContext.conversationId);
-        if (promise) {
-          this.delegationPromises.delete(childContext.conversationId);
-          this.activeDelegations.delete(delegationId);
-          promise.reject(new AgentExecutionError(
-            `Agent execution failed for "${toAgent}": ${error.message}`,
-            fromAgent,
-            { toAgent, originalError: error }
-          ));
-        }
-      });
+        // Execute delegated request using agentic loop
+        const reportResult = await this.agentEngine.handleDelegatedRequest(
+          childContext,
+          delegationInput,
+          delegatedAgentTools
+        );
 
-      // Return the promise that will be resolved when reportOut is called
-      return await delegationPromise;
+        // Clean up delegation tracking
+        this.delegationPromises.delete(childContext.conversationId);
+        this.activeDelegations.delete(delegationId);
+        
+        // Mark conversation as completed
+        this.conversationManager.terminateConversation(childContext.conversationId);
+
+        return reportResult;
+
+      } catch (error) {
+        // Mark conversation as failed
+        this.conversationManager.markConversationFailed(childContext.conversationId, error instanceof Error ? error : new Error(String(error)));
+        
+        // Clean up delegation tracking
+        this.delegationPromises.delete(childContext.conversationId);
+        this.activeDelegations.delete(delegationId);
+        
+        throw new AgentExecutionError(
+          `Delegated agent execution failed for "${toAgent}": ${error instanceof Error ? error.message : 'Unknown error'}`,
+          fromAgent,
+          { toAgent, originalError: error }
+        );
+      }
 
     } catch (error) {
       if (error instanceof Error && 'type' in error) {
@@ -501,7 +520,7 @@ export class DefaultDelegationEngine implements DelegationEngine {
     }
     
     // Fallback implementation
-    const childContext = await this.agentEngine.initializeAgent(config, extensionConfig);
+    const childContext = await this.agentEngine.initializeAgent(config, extensionConfig, parentContext.model);
     childContext.parentConversationId = parentContext.conversationId;
     childContext.delegationChain = [...parentContext.delegationChain, parentContext.agentName];
     

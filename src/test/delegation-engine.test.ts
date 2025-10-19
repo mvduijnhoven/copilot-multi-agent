@@ -11,48 +11,11 @@ import {
   AgentExecutionContext,
   ExtensionConfiguration
 } from '../models';
+import { TestDataFactory, MockAgentEngine } from './test-data-factory';
 
-// Mock implementations
-class MockAgentEngine implements AgentEngine {
-  private contexts: Map<string, AgentExecutionContext> = new Map();
-  
-  async initializeAgent(config: AgentConfiguration): Promise<AgentExecutionContext> {
-    const context: AgentExecutionContext = {
-      agentName: config.name,
-      conversationId: `${config.name}-123`,
-      systemPrompt: config.systemPrompt,
-      availableTools: [],
-      delegationChain: [],
-      availableDelegationTargets: []
-    };
-    this.contexts.set(config.name, context);
-    return context;
-  }
-  
-  async executeAgent(context: AgentExecutionContext, input: string): Promise<string> {
-    return `Agent ${context.agentName} processed: ${input}`;
-  }
-  
-  getAgentContext(agentName: string): AgentExecutionContext | undefined {
-    return this.contexts.get(agentName);
-  }
-  
-  terminateAgent(agentName: string): void {
-    this.contexts.delete(agentName);
-  }
-  
-  getActiveAgents(): AgentExecutionContext[] {
-    return Array.from(this.contexts.values());
-  }
-  
-  setMockContext(agentName: string, context: AgentExecutionContext): void {
-    this.contexts.set(agentName, context);
-  }
-  
-  clearMockContexts(): void {
-    this.contexts.clear();
-  }
-}
+// Using TestDataFactory for all context creation
+
+// Using MockAgentEngine from test-data-factory
 
 class MockConfigurationManager implements IConfigurationManager {
   private config: ExtensionConfiguration = {
@@ -116,7 +79,7 @@ export async function runDelegationEngineTests(): Promise<void> {
   
   // Test setup
   function setup(): DefaultDelegationEngine {
-    mockAgentEngine.clearMockContexts();
+    mockAgentEngine.clearMocks();
     return new DefaultDelegationEngine(mockAgentEngine, mockConfigManager);
   }
   
@@ -228,14 +191,7 @@ export async function runDelegationEngineTests(): Promise<void> {
   console.log('Test 8: Report out functionality');
   
   // Set up a mock context for the agent
-  const testContext: AgentExecutionContext = {
-    agentName: 'test-agent',
-    conversationId: 'test-123',
-    systemPrompt: 'Test prompt',
-    availableTools: [],
-    delegationChain: ['coordinator'],
-    availableDelegationTargets: []
-  };
+  const testContext = TestDataFactory.createDelegatedContext();
   mockAgentEngine.setMockContext('test-agent', testContext);
   
   // This should not throw

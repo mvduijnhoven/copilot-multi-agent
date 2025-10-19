@@ -181,14 +181,62 @@
     - Implement performance and stress testing scenarios
     - _Requirements: 7.3, 7.4, 8.4, 8.5, 10.3_
 
-- [x] 11. Finalize extension packaging and documentation
-  - [x] 11.1 Update package.json and extension metadata
+- [x] 11. Implement agentic loop architecture
+  - [x] 11.1 Update agent execution context for agentic loops
+    - Modify AgentExecutionContext interface to include model, conversation history, and loop state properties
+    - Update agent initialization methods to extract and store model from ChatRequest
+    - Add conversation management utilities for maintaining message history during loops
+    - Create helper methods for conversation state tracking and tool invocation logging
+    - Write unit tests for conversation management and context updates
+    - _Requirements: 11.1, 11.2_
+
+  - [x] 11.2 Implement entry agent agentic loop
+    - Create executeAgenticLoop method in AgentEngine that continues until no tool invocations are present
+    - Add conversation initialization with system prompt and user request as separate messages
+    - Implement iterative loop that sends conversation to model, processes response, and executes tools
+    - Add tool execution results integration back into conversation for next iteration
+    - Implement termination logic that ends loop when LLM response contains no tool calls
+    - Add comprehensive error handling and cancellation support throughout the loop
+    - Write unit tests for agentic loop execution and termination conditions
+    - _Requirements: 11.3, 11.6_
+
+  - [x] 11.3 Implement delegated agent agentic loop  
+    - Create handleDelegatedRequest method that initializes conversation with delegated work description
+    - Implement agentic loop that continues until reportOut tool is called
+    - Add special handling for reportOut tool that terminates loop and captures report content
+    - Implement report forwarding mechanism back to delegating agent's conversation context
+    - Add conversation isolation to prevent interference between delegating and delegated agents
+    - Handle cases where delegated agents don't call reportOut and provide fallback mechanisms
+    - Write unit tests for delegated agent loops and report forwarding
+    - _Requirements: 11.4, 11.5_
+
+  - [x] 11.4 Update chat participant to use agentic loops
+    - Modify handleRequest method to extract model from ChatRequest parameter
+    - Update entry agent execution flow to use new executeAgenticLoop method instead of single execution
+    - Integrate agentic loop results with response streaming to show progress during iterations
+    - Add real-time streaming of tool executions and intermediate results to user
+    - Update error handling to properly manage agentic loop failures and provide meaningful feedback
+    - Ensure cancellation tokens work properly throughout the agentic loop execution
+    - Write integration tests for chat participant agentic loop integration
+    - _Requirements: 11.1, 11.2, 11.6_
+
+  - [x] 11.5 Update delegation engine for agentic loop integration
+    - Modify delegation engine to use agentic loops for delegated agent execution
+    - Update delegateWork tool to properly initialize delegated agent conversations
+    - Integrate report forwarding from delegated agents back to delegating agent conversations
+    - Add conversation context management for nested delegations and multi-level agent chains
+    - Implement proper cleanup and resource management for completed delegated agent loops
+    - Write comprehensive tests for delegation engine agentic loop integration
+    - _Requirements: 11.4, 11.5_
+
+- [x] 12. Finalize extension packaging and documentation
+  - [x] 12.1 Update package.json and extension metadata
     - Complete package.json with proper dependencies, contributions, and metadata
     - Add extension icon, description, repository and marketplace information
     - Configure build scripts and packaging for distribution
-    - _Requirements: 11.1, 11.4_
+    - _Requirements: 12.1, 12.4_
 
-  - [x] 11.2 Create user documentation and examples
+  - [x] 12.2 Create user documentation and examples
     - Write README with setup instructions and configuration examples including entry agent setup
     - Create example agent configurations for common use cases
     - Add troubleshooting guide and FAQ section

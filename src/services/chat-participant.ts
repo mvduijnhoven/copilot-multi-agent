@@ -179,7 +179,7 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
       // Initialize entry agent with error handling
       let entryAgentContext;
       try {
-        entryAgentContext = await this.initializeEntryAgent(entryAgentResolution.agent);
+        entryAgentContext = await this.initializeEntryAgent(entryAgentResolution.agent, request);
       } catch (initError) {
         await this.handleAgentExecutionError(stream, initError, request);
         return { metadata: { command: request.command || '', requestId: (request as any).requestId || 'unknown' } };
@@ -251,9 +251,9 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
   }
 
   /**
-   * Initializes the entry agent with current configuration
+   * Initializes the entry agent with current configuration and model from request
    */
-  private async initializeEntryAgent(entryAgentConfig: AgentConfiguration): Promise<AgentExecutionContext> {
+  private async initializeEntryAgent(entryAgentConfig: AgentConfiguration, request?: vscode.ChatRequest): Promise<AgentExecutionContext> {
     try {
       // Ensure we have a valid entry agent configuration
       const config = entryAgentConfig;
@@ -261,14 +261,33 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
       // Load the complete extension configuration for delegation context
       const extensionConfig = await this.configurationManager.loadConfiguration();
 
-      // Initialize the coordinator agent with extended system prompt
-      const context = await this.agentEngine.initializeAgent(config, extensionConfig);
+      // Extract model from ChatRequest if available
+      let model: any = undefined;
+      if (request && (request as any).model) {
+        model = (request as any).model;
+      } else if (this.isLanguageModelAvailable()) {
+        // Try to get default model
+        try {
+          const models = await vscode.lm.selectChatModels({
+            vendor: 'copilot',
+            family: 'gpt-4o'
+          });
+          if (models.length > 0) {
+            model = models[0];
+          }
+        } catch (error) {
+          console.warn('Failed to get language model:', error);
+        }
+      }
+
+      // Initialize the entry agent with extended system prompt and model
+      const context = await this.agentEngine.initializeAgent(config, extensionConfig, model);
 
       return context;
     } catch (error) {
       throw new AgentExecutionError(
-        `Failed to initialize coordinator agent: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        'coordinator',
+        `Failed to initialize entry agent: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        entryAgentConfig.name,
         { originalError: error }
       );
     }
@@ -315,12 +334,9 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
       // Execute the entry agent with enhanced context and streaming
       const enhancedContext = await this.enhanceEntryAgentContext(entryAgentContext, request, context);
 
-      // Create response promise for streaming
-      const responsePromise = this.executeEntryAgentWithTools(enhancedContext, entryAgentConfig, userMessage, delegationTools, token);
-
-      // Stream response with progress updates
+      // Execute agentic loop for entry agent
       stream.markdown('**Response:**\n\n');
-      await this.streamResponseWithProgress(stream, responsePromise, token);
+      await this.executeEntryAgentAgenticLoop(enhancedContext, entryAgentConfig, userMessage, delegationTools, stream, token);
 
       // Add context information
       stream.markdown('\n\n---\n');
@@ -654,6 +670,96 @@ export class MultiAgentChatParticipant implements IMultiAgentChatParticipant {
     }
 
     return response;
+  }
+
+  /**
+   * Executes entry agent using agentic loop with real-time streaming
+   */
+  private async executeEntryAgentAgenticLoop(
+    entryAgentContext: AgentExecutionContext,
+    entryAgentConfig: AgentConfiguration,
+    userMessage: string,
+    delegationTools: vscode.LanguageModelTool<any>[],
+    stream: vscode.ChatResponseStream,
+    token: vscode.CancellationToken
+  ): Promise<void> {
+    try {
+      // Check for cancellation before starting
+      if (token.isCancellationRequested) {
+        return;
+      }
+
+      // Combine available tools with delegation tools
+      const allTools = [...entryAgentContext.availableTools, ...delegationTools];
+
+      // Check if we have a model for agentic loop execution
+      if (!entryAgentContext.model) {
+        // Fallback to simulation if no model available
+        stream.markdown('*Using simulation mode (language model not available)*\n\n');
+        const simulationResult = await this.executeWithSimulation(
+          entryAgentContext,
+          entryAgentConfig,
+          userMessage,
+          delegationTools,
+          token
+        );
+        stream.markdown(simulationResult);
+        return;
+      }
+
+      // Execute agentic loop with real-time streaming
+      stream.markdown(`*Starting agentic loop for ${entryAgentConfig.name}...*\n\n`);
+      
+      const loopResult = await this.agentEngine.executeAgenticLoop(
+        entryAgentContext,
+        userMessage,
+        allTools,
+        token
+      );
+
+      // Stream the final response
+      if (loopResult.finalResponse) {
+        stream.markdown(loopResult.finalResponse);
+      }
+
+      // Stream tool invocation summary if any tools were used
+      if (loopResult.toolInvocations.length > 0) {
+        stream.markdown('\n\n**Tool Usage Summary:**\n');
+        for (const invocation of loopResult.toolInvocations) {
+          const executionTime = invocation.executionTime ? ` (${invocation.executionTime}ms)` : '';
+          stream.markdown(`- ${invocation.toolName}${executionTime}\n`);
+        }
+      }
+
+      // Stream iteration count
+      if (loopResult.iterationCount > 1) {
+        stream.markdown(`\n*Completed in ${loopResult.iterationCount} iterations*\n`);
+      }
+
+    } catch (error) {
+      if (error instanceof vscode.CancellationError) {
+        stream.markdown('\n⏹️ *Execution was cancelled*\n');
+        return;
+      }
+
+      console.error('Agentic loop execution failed:', error);
+      
+      // Fallback to simulation on error
+      stream.markdown('\n*Falling back to simulation mode due to execution error*\n\n');
+      try {
+        const simulationResult = await this.executeWithSimulation(
+          entryAgentContext,
+          entryAgentConfig,
+          userMessage,
+          delegationTools,
+          token
+        );
+        stream.markdown(simulationResult);
+      } catch (simulationError) {
+        stream.markdown('❌ Failed to execute request. Please try again.');
+        console.error('Simulation fallback also failed:', simulationError);
+      }
+    }
   }
 
   /**

@@ -225,14 +225,8 @@ suite('AgentEngine Tests', () => {
     });
 
     test('should handle execution errors', async () => {
-      const invalidContext = {
-        agentName: '',
-        conversationId: '',
-        systemPrompt: '',
-        availableTools: [],
-        delegationChain: [],
-        availableDelegationTargets: []
-      } as AgentExecutionContext;
+      const context = await agentEngine.initializeAgent(testAgentConfig);
+      const invalidContext = { ...context, agentName: '' }; // Make it invalid
 
       try {
         await agentEngine.executeAgent(invalidContext, 'test');
@@ -345,6 +339,198 @@ suite('AgentEngine Tests', () => {
       const updatedContext = agentEngine.getAgentContext(testAgentConfig.name);
       assert.ok(updatedContext);
       assert.ok(updatedContext.availableTools.length >= originalToolCount);
+    });
+  });
+
+  suite('Agentic Loop Architecture', () => {
+    const mockModel = {
+      sendRequest: async () => ({ text: 'Mock response', toolCalls: [] })
+    };
+
+    const mockTools = [
+      { name: 'testTool', invoke: async () => 'Tool result' },
+      { name: 'delegateWork', invoke: async () => 'Delegation result' },
+      { name: 'reportOut', invoke: async () => 'Report submitted' }
+    ];
+
+    test('should initialize agent with agentic loop properties', async () => {
+      const context = await agentEngine.initializeAgent(testAgentConfig, undefined, mockModel);
+
+      assert.strictEqual(context.model, mockModel);
+      assert.ok(Array.isArray(context.conversation));
+      assert.strictEqual(context.isAgenticLoop, false);
+      assert.ok(Array.isArray(context.toolInvocations));
+      assert.ok(context.loopState);
+      assert.strictEqual(context.loopState.isActive, false);
+      assert.strictEqual(context.loopState.iterationCount, 0);
+      assert.strictEqual(context.loopState.hasToolInvocations, false);
+      assert.strictEqual(context.loopState.reportOutCalled, false);
+    });
+
+    test('should execute agentic loop for entry agent', async () => {
+      const context = await agentEngine.initializeAgent(testAgentConfig, undefined, mockModel);
+      const initialMessage = 'Test message for agentic loop';
+
+      const result = await agentEngine.executeAgenticLoop(context, initialMessage, mockTools);
+
+      assert.ok(result);
+      assert.ok(typeof result.finalResponse === 'string');
+      assert.ok(Array.isArray(result.toolInvocations));
+      assert.ok(Array.isArray(result.conversationHistory));
+      assert.ok(typeof result.completed === 'boolean');
+      assert.ok(typeof result.iterationCount === 'number');
+      assert.strictEqual(context.isAgenticLoop, true);
+      assert.ok(context.conversation.length >= 2); // At least system prompt + user message
+    });
+
+    test('should handle delegated request with agentic loop', async () => {
+      const context = await agentEngine.initializeAgent(testAgentConfig, undefined, mockModel);
+      const delegatedWork = 'Complete this delegated task';
+
+      const report = await agentEngine.handleDelegatedRequest(context, delegatedWork, mockTools);
+
+      assert.ok(typeof report === 'string');
+      assert.strictEqual(context.isAgenticLoop, true);
+      assert.ok(context.conversation.length >= 2); // At least system prompt + delegated work
+    });
+
+    test('should track tool invocations in agentic loop', async () => {
+      const context = await agentEngine.initializeAgent(testAgentConfig, undefined, mockModel);
+      
+      // Mock model that returns tool calls on first call, then no tools on second call
+      let callCount = 0;
+      const mockModelWithTools = {
+        sendRequest: async (conversation: any, options: any, token?: any) => {
+          callCount++;
+          if (callCount === 1) {
+            return {
+              text: 'Using tools',
+              toolCalls: [{ name: 'testTool', parameters: { test: 'param' } }]
+            };
+          } else {
+            return {
+              text: 'Task completed',
+              toolCalls: []
+            };
+          }
+        }
+      };
+      context.model = mockModelWithTools;
+
+      const result = await agentEngine.executeAgenticLoop(context, 'Test with tools', mockTools);
+
+      assert.ok(context.toolInvocations.length > 0);
+      const invocation = context.toolInvocations[0];
+      assert.strictEqual(invocation.toolName, 'testTool');
+      assert.ok(invocation.timestamp instanceof Date);
+      assert.ok(invocation.parameters);
+    });
+
+    test('should handle conversation management utilities', async () => {
+      const { ConversationManager } = require('../models/agent-configuration');
+      
+      const conversation = ConversationManager.initializeConversation('System prompt', 'User message');
+      assert.strictEqual(conversation.length, 2);
+      assert.strictEqual(conversation[0].role, 'system');
+      assert.strictEqual(conversation[1].role, 'user');
+
+      ConversationManager.addMessage(conversation, 'assistant', 'Assistant response');
+      assert.strictEqual(conversation.length, 3);
+      assert.strictEqual(conversation[2].role, 'assistant');
+
+      ConversationManager.addToolResult(conversation, 'testTool', 'Tool result');
+      assert.strictEqual(conversation.length, 4);
+      assert.ok(conversation[3].content.includes('Tool testTool result'));
+
+      const lastMessage = ConversationManager.getLastMessage(conversation);
+      assert.strictEqual(lastMessage, conversation[3]);
+    });
+
+    test('should handle loop state management utilities', async () => {
+      const { AgentLoopStateManager } = require('../models/agent-configuration');
+      
+      const state = AgentLoopStateManager.createInitialState(10);
+      assert.strictEqual(state.isActive, false);
+      assert.strictEqual(state.iterationCount, 0);
+      assert.strictEqual(state.maxIterations, 10);
+
+      AgentLoopStateManager.startIteration(state);
+      assert.strictEqual(state.isActive, true);
+      assert.strictEqual(state.iterationCount, 1);
+
+      AgentLoopStateManager.recordToolInvocation(state, 'testTool');
+      assert.strictEqual(state.hasToolInvocations, true);
+      assert.ok(state.lastToolInvocation instanceof Date);
+
+      AgentLoopStateManager.recordToolInvocation(state, 'reportOut');
+      assert.strictEqual(state.reportOutCalled, true);
+
+      assert.strictEqual(AgentLoopStateManager.shouldContinueLoop(state), false);
+      
+      AgentLoopStateManager.completeLoop(state, 'Test report');
+      assert.strictEqual(state.isActive, false);
+      assert.strictEqual(state.reportContent, 'Test report');
+    });
+
+    test('should handle tool invocation tracking utilities', async () => {
+      const { ToolInvocationTracker } = require('../models/agent-configuration');
+      const context = await agentEngine.initializeAgent(testAgentConfig, undefined, mockModel);
+      
+      const invocation = ToolInvocationTracker.createInvocation(
+        'testTool',
+        { param: 'value' },
+        'result',
+        100
+      );
+      
+      assert.strictEqual(invocation.toolName, 'testTool');
+      assert.deepStrictEqual(invocation.parameters, { param: 'value' });
+      assert.strictEqual(invocation.result, 'result');
+      assert.strictEqual(invocation.executionTime, 100);
+      assert.ok(invocation.timestamp instanceof Date);
+
+      ToolInvocationTracker.addInvocation(context, invocation);
+      assert.strictEqual(context.toolInvocations.length, 1);
+      assert.strictEqual(context.loopState.hasToolInvocations, true);
+
+      const toolInvocations = ToolInvocationTracker.getInvocationsByTool(context, 'testTool');
+      assert.strictEqual(toolInvocations.length, 1);
+
+      const totalTime = ToolInvocationTracker.getTotalExecutionTime(context);
+      assert.strictEqual(totalTime, 100);
+
+      ToolInvocationTracker.clearInvocations(context);
+      assert.strictEqual(context.toolInvocations.length, 0);
+    });
+
+    test('should handle errors in agentic loop execution', async () => {
+      const context = await agentEngine.initializeAgent(testAgentConfig, undefined, mockModel);
+      
+      // Test with invalid context
+      const invalidContext = { ...context, agentName: '' };
+      
+      try {
+        await agentEngine.executeAgenticLoop(invalidContext as any, 'Test', mockTools);
+        assert.fail('Should have thrown an error');
+      } catch (error) {
+        assert.ok(error instanceof AgentExecutionError);
+        assert.ok(error.message.includes('Invalid agent execution context'));
+      }
+    });
+
+    test('should handle errors in delegated request execution', async () => {
+      const context = await agentEngine.initializeAgent(testAgentConfig, undefined, mockModel);
+      
+      // Test with missing model
+      const contextWithoutModel = { ...context, model: undefined };
+      
+      try {
+        await agentEngine.handleDelegatedRequest(contextWithoutModel, 'Test work', mockTools);
+        assert.fail('Should have thrown an error');
+      } catch (error) {
+        assert.ok(error instanceof AgentExecutionError);
+        assert.ok(error.message.includes('Language model is required'));
+      }
     });
   });
 });

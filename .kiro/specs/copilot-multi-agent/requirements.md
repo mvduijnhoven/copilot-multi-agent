@@ -129,6 +129,19 @@ This feature extends the GitHub Copilot Chat extension with multi-agent capabili
 
 ### Requirement 11
 
+**User Story:** As a developer, I want agents to use the model specified in the ChatRequest and perform agentic loops with proper conversation management, so that each agent can iteratively process requests using the appropriate language model until completion.
+
+#### Acceptance Criteria
+
+1. WHEN a ChatRequest is received THEN the system SHALL extract the model from the ChatRequest and use it for agent execution
+2. WHEN an agent handles a request THEN the system SHALL start with a conversation containing only the system prompt and the user request
+3. WHEN an agent processes a request THEN the system SHALL perform an agentic loop where the agent can make multiple tool calls and receive responses
+4. WHEN an agent handles a delegated request THEN the system SHALL stop the agentic loop when the reportOut tool is called
+5. WHEN the reportOut tool is called THEN the system SHALL pass the report back to the delegating agent's conversation and continue its agentic loop
+6. WHEN the entry agent processes a request THEN the system SHALL end the agentic loop when the LLM response contains no tool invocations
+
+### Requirement 12
+
 **User Story:** As a developer, I want the extension to integrate seamlessly with existing VS Code and GitHub Copilot functionality, so that it enhances rather than disrupts my current development workflow.
 
 #### Acceptance Criteria

@@ -6,7 +6,7 @@ export default defineConfig({
 	workspaceFolder: './test-workspace',
 	mocha: {
 		ui: 'tdd',
-		timeout: 20000
+		timeout: 10000
 	},
 	// Extension development path for our extension
 	extensionDevelopmentPath: '.',

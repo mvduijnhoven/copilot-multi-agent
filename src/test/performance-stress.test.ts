@@ -23,6 +23,7 @@ import {
   createTestConfiguration,
   mockVscode
 } from './test-setup';
+import { TestDataFactory } from './test-data-factory';
 
 // Use TestPerformanceMonitor from test-setup
 
@@ -52,6 +53,21 @@ class PerformanceConfigurationManager extends ConfigurationManager {
   }
 }
 
+
+// Mock model for agentic loop testing
+function createMockModel() {
+  return {
+    sendRequest: async () => ({
+      text: 'Task completed successfully.',
+      toolCalls: [{
+        name: 'reportOut',
+        parameters: {
+          report: 'Task has been completed as requested.'
+        }
+      }]
+    })
+  };
+}
 suite('Performance and Stress Tests', () => {
   let delegationEngine: DefaultDelegationEngine;
   let agentEngine: DefaultAgentEngine;
@@ -157,7 +173,7 @@ suite('Performance and Stress Tests', () => {
       performanceMonitor.start();
       
       // Initialize coordinator with large configuration
-      const context = await agentEngine.initializeAgent(manyAgents[0], largeConfig);
+      const context = await agentEngine.initializeAgent(manyAgents[0], largeConfig, createMockModel());
       
       const metrics = performanceMonitor.end();
 
@@ -175,9 +191,20 @@ suite('Performance and Stress Tests', () => {
       config.agents.push(createTestAgent('target-agent', 'Target tasks'));
       configManager.setTestConfiguration(config);
 
-      // Initialize coordinator
+      // Initialize coordinator with a model that reports the expected message
       const coordinatorConfig = config.agents.find(a => a.name === 'coordinator')!;
-      await agentEngine.initializeAgent(coordinatorConfig, config);
+      const mockModel = TestDataFactory.createMockModel({
+        sendRequest: async () => ({
+          text: 'Task completed successfully.',
+          toolCalls: [{
+            name: 'reportOut',
+            parameters: {
+              report: 'Performance test completed'
+            }
+          }]
+        })
+      });
+      await agentEngine.initializeAgent(coordinatorConfig, config, mockModel);
 
       performanceMonitor.start();
       
@@ -188,10 +215,7 @@ suite('Performance and Stress Tests', () => {
         'Performance test report'
       );
 
-      // Complete delegation quickly
-      setTimeout(() => {
-        delegationEngine.reportOut('target-agent', 'Performance test completed');
-      }, 10);
+      // The mock model will automatically call reportOut with the expected message
 
       const result = await delegationPromise;
       const metrics = performanceMonitor.end();
@@ -212,9 +236,24 @@ suite('Performance and Stress Tests', () => {
       config.agents.push(...targetAgents);
       configManager.setTestConfiguration(config);
 
-      // Initialize coordinator
+      // Initialize coordinator with a model that reports task completion
       const coordinatorConfig = config.agents.find(a => a.name === 'coordinator')!;
-      await agentEngine.initializeAgent(coordinatorConfig, config);
+      let taskCounter = 0;
+      const mockModel = TestDataFactory.createMockModel({
+        sendRequest: async () => {
+          const currentTask = taskCounter++;
+          return {
+            text: 'Task completed successfully.',
+            toolCalls: [{
+              name: 'reportOut',
+              parameters: {
+                report: `Task ${currentTask} completed`
+              }
+            }]
+          };
+        }
+      });
+      await agentEngine.initializeAgent(coordinatorConfig, config, mockModel);
 
       performanceMonitor.start();
 
@@ -223,12 +262,7 @@ suite('Performance and Stress Tests', () => {
         delegationEngine.delegateWork('coordinator', agent.name, `Task ${i}`, `Report ${i}`)
       );
 
-      // Complete all delegations
-      setTimeout(() => {
-        targetAgents.forEach((agent, i) => {
-          delegationEngine.reportOut(agent.name, `Task ${i} completed`);
-        });
-      }, 50);
+      // The mock model will automatically call reportOut for each delegation
 
       const results = await Promise.all(delegationPromises);
       const metrics = performanceMonitor.end();
@@ -257,8 +291,19 @@ suite('Performance and Stress Tests', () => {
       config.agents.push(...chainAgents);
       configManager.setTestConfiguration(config);
 
-      // Initialize first agent
-      await agentEngine.initializeAgent(chainAgents[0], config);
+      // Initialize first agent with a model that reports chain completion
+      const mockModel = TestDataFactory.createMockModel({
+        sendRequest: async () => ({
+          text: 'Task completed successfully.',
+          toolCalls: [{
+            name: 'reportOut',
+            parameters: {
+              report: 'Chain performance test completed'
+            }
+          }]
+        })
+      });
+      await agentEngine.initializeAgent(chainAgents[0], config, mockModel);
 
       performanceMonitor.start();
 
@@ -270,10 +315,7 @@ suite('Performance and Stress Tests', () => {
         'Chain performance report'
       );
 
-      // Complete delegation quickly
-      setTimeout(() => {
-        delegationEngine.reportOut('chain-1', 'Chain performance test completed');
-      }, 25);
+      // The mock model will automatically call reportOut
 
       const result = await delegationPromise;
       const metrics = performanceMonitor.end();
@@ -321,7 +363,7 @@ suite('Performance and Stress Tests', () => {
 
       // Initialize coordinator
       const coordinatorConfig = config.agents.find(a => a.name === 'coordinator')!;
-      await agentEngine.initializeAgent(coordinatorConfig, config);
+      await agentEngine.initializeAgent(coordinatorConfig, config, createMockModel());
 
       performanceMonitor.start();
 
@@ -412,7 +454,7 @@ suite('Performance and Stress Tests', () => {
       performanceMonitor.start();
 
       // Initialize coordinator (triggers system prompt building)
-      const context = await agentEngine.initializeAgent(manyAgents[0], config);
+      const context = await agentEngine.initializeAgent(manyAgents[0], config, createMockModel());
 
       const metrics = performanceMonitor.end();
 
@@ -437,7 +479,7 @@ suite('Performance and Stress Tests', () => {
 
       // Build system prompts many times
       for (let i = 0; i < 100; i++) {
-        const context = await agentEngine.initializeAgent(agents[0], config);
+        const context = await agentEngine.initializeAgent(agents[0], config, createMockModel());
         assert.ok(context.systemPrompt.includes('## Available Agents for Delegation'));
         agentEngine.terminateAgent('coordinator');
       }
@@ -462,7 +504,7 @@ suite('Performance and Stress Tests', () => {
 
       // Initialize coordinator
       const coordinatorConfig = config.agents.find(a => a.name === 'coordinator')!;
-      await agentEngine.initializeAgent(coordinatorConfig, config);
+      await agentEngine.initializeAgent(coordinatorConfig, config, createMockModel());
 
       performanceMonitor.start();
 
@@ -526,7 +568,7 @@ suite('Performance and Stress Tests', () => {
       const workloadPromises = [];
 
       // Simple delegations
-      await agentEngine.initializeAgent(diverseAgents[0], config);
+      await agentEngine.initializeAgent(diverseAgents[0], config, createMockModel());
       for (let i = 0; i < 10; i++) {
         const promise = delegationEngine.delegateWork(
           'heavy-delegator',
@@ -538,7 +580,7 @@ suite('Performance and Stress Tests', () => {
       }
 
       // Delegation chain
-      await agentEngine.initializeAgent(diverseAgents[2], config);
+      await agentEngine.initializeAgent(diverseAgents[2], config, createMockModel());
       const chainPromise = delegationEngine.delegateWork(
         'chain-starter',
         'chain-middle',
@@ -601,7 +643,7 @@ suite('Performance and Stress Tests', () => {
       performanceMonitor.start();
 
       // Initialize coordinator with large configuration
-      const context = await agentEngine.initializeAgent(scaleAgents[0], config);
+      const context = await agentEngine.initializeAgent(scaleAgents[0], config, createMockModel());
 
       const metrics = performanceMonitor.end();
 

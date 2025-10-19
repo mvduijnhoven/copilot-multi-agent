@@ -151,6 +151,45 @@ interface EntryAgentManager {
 }
 ```
 
+### Agent Engine Interface
+
+```typescript
+interface AgentEngine {
+  initializeAgent(
+    agentConfig: AgentConfiguration,
+    extensionConfig: ExtensionConfiguration,
+    model: vscode.LanguageModelChat
+  ): Promise<AgentExecutionContext>;
+  
+  executeAgenticLoop(
+    context: AgentExecutionContext,
+    initialMessage: string,
+    tools: vscode.LanguageModelTool[],
+    token: vscode.CancellationToken
+  ): Promise<AgentLoopResult>;
+  
+  handleDelegatedRequest(
+    context: AgentExecutionContext,
+    delegatedWork: string,
+    tools: vscode.LanguageModelTool[],
+    token: vscode.CancellationToken
+  ): Promise<string>;
+}
+
+interface AgentLoopResult {
+  finalResponse: string;
+  toolInvocations: ToolInvocation[];
+  conversationHistory: vscode.LanguageModelChatMessage[];
+  completed: boolean;
+}
+
+interface ToolInvocation {
+  toolName: string;
+  parameters: any;
+  result: any;
+  timestamp: Date;
+}
+
 ## Data Models
 
 ### Configuration Storage
@@ -201,6 +240,9 @@ interface AgentExecutionContext {
   availableTools: vscode.LanguageModelTool[];
   delegationChain: string[];
   availableDelegationTargets: DelegationTarget[];
+  model: vscode.LanguageModelChat;
+  conversation: vscode.LanguageModelChatMessage[];
+  isAgenticLoop: boolean;
 }
 
 interface DelegationTarget {
@@ -368,6 +410,166 @@ const testScenarios = [
   'Tool access restriction',
   'Configuration update during execution'
 ];
+```
+
+## Agentic Loop Architecture
+
+### Overview
+
+The system implements an agentic loop pattern where agents can iteratively process requests by making multiple tool calls and receiving responses until they complete their task. This enables more sophisticated problem-solving capabilities where agents can break down complex tasks into smaller steps.
+
+### Entry Agent Loop
+
+The entry agent performs an agentic loop that continues until the LLM response contains no tool invocations:
+
+1. **Initialize**: Create conversation with system prompt and user request
+2. **Execute**: Send conversation to language model with available tools
+3. **Process Response**: Check if response contains tool invocations
+4. **Tool Execution**: If tools are invoked, execute them and add results to conversation
+5. **Continue/Complete**: If tools were invoked, repeat from step 2; otherwise, complete
+
+### Delegated Agent Loop
+
+When an agent handles delegated work, it performs a similar loop but with different termination conditions:
+
+1. **Initialize**: Create conversation with system prompt and delegated work description
+2. **Execute**: Send conversation to language model with available tools
+3. **Process Response**: Check for tool invocations, especially reportOut
+4. **Tool Execution**: Execute tools and add results to conversation
+5. **Report Out**: If reportOut is called, terminate loop and return report to delegating agent
+6. **Continue**: If other tools were invoked, repeat from step 2
+
+### Conversation Management
+
+Each agent maintains its own conversation context:
+
+```typescript
+interface AgentConversation {
+  messages: vscode.LanguageModelChatMessage[];
+  toolInvocations: ToolInvocation[];
+  parentConversationId?: string;
+  delegationChain: string[];
+}
+```
+
+### Model Usage
+
+The system extracts the language model from the ChatRequest and uses it consistently throughout the agent execution:
+
+```typescript
+// Extract model from ChatRequest
+const model = request.model || await getDefaultModel();
+
+// Use model for all agent interactions
+const response = await model.sendRequest(messages, { tools }, token);
+```
+
+### Agentic Loop Implementation Details
+
+#### Entry Agent Loop Flow
+
+```typescript
+async function executeEntryAgentLoop(
+  context: AgentExecutionContext,
+  initialMessage: string,
+  tools: vscode.LanguageModelTool[],
+  token: vscode.CancellationToken
+): Promise<AgentLoopResult> {
+  // Initialize conversation with system prompt and user message
+  const conversation = [
+    vscode.LanguageModelChatMessage.User(context.systemPrompt),
+    vscode.LanguageModelChatMessage.User(initialMessage)
+  ];
+
+  let hasToolInvocations = true;
+  const toolInvocations: ToolInvocation[] = [];
+
+  while (hasToolInvocations && !token.isCancellationRequested) {
+    // Send request to model
+    const response = await context.model.sendRequest(conversation, { tools }, token);
+    
+    // Process response and check for tool calls
+    const { responseText, toolCalls } = await processModelResponse(response);
+    
+    // Add assistant response to conversation
+    conversation.push(vscode.LanguageModelChatMessage.Assistant(responseText));
+    
+    if (toolCalls.length > 0) {
+      // Execute tools and add results to conversation
+      for (const toolCall of toolCalls) {
+        const result = await executeTool(toolCall, tools);
+        toolInvocations.push({
+          toolName: toolCall.name,
+          parameters: toolCall.parameters,
+          result,
+          timestamp: new Date()
+        });
+        
+        // Add tool result to conversation
+        conversation.push(vscode.LanguageModelChatMessage.User(`Tool ${toolCall.name} result: ${result}`));
+      }
+    } else {
+      hasToolInvocations = false; // No more tools to execute, end loop
+    }
+  }
+
+  return {
+    finalResponse: conversation[conversation.length - 1].content,
+    toolInvocations,
+    conversationHistory: conversation,
+    completed: !hasToolInvocations
+  };
+}
+```
+
+#### Delegated Agent Loop Flow
+
+```typescript
+async function executeDelegatedAgentLoop(
+  context: AgentExecutionContext,
+  delegatedWork: string,
+  tools: vscode.LanguageModelTool[],
+  token: vscode.CancellationToken
+): Promise<string> {
+  // Initialize conversation with system prompt and delegated work
+  const conversation = [
+    vscode.LanguageModelChatMessage.User(context.systemPrompt),
+    vscode.LanguageModelChatMessage.User(delegatedWork)
+  ];
+
+  let reportOutCalled = false;
+  let reportResult = '';
+
+  while (!reportOutCalled && !token.isCancellationRequested) {
+    // Send request to model
+    const response = await context.model.sendRequest(conversation, { tools }, token);
+    
+    // Process response and check for tool calls
+    const { responseText, toolCalls } = await processModelResponse(response);
+    
+    // Add assistant response to conversation
+    conversation.push(vscode.LanguageModelChatMessage.Assistant(responseText));
+    
+    if (toolCalls.length > 0) {
+      for (const toolCall of toolCalls) {
+        if (toolCall.name === 'reportOut') {
+          reportResult = toolCall.parameters.report;
+          reportOutCalled = true;
+          break; // Exit loop when reportOut is called
+        } else {
+          // Execute other tools normally
+          const result = await executeTool(toolCall, tools);
+          conversation.push(vscode.LanguageModelChatMessage.User(`Tool ${toolCall.name} result: ${result}`));
+        }
+      }
+    } else {
+      // If no tools called, continue loop (delegated agents must call reportOut to complete)
+      conversation.push(vscode.LanguageModelChatMessage.User('Please complete your task and call reportOut with your findings.'));
+    }
+  }
+
+  return reportResult;
+}
 ```
 
 ## Implementation Considerations

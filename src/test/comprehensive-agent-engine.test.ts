@@ -204,14 +204,9 @@ suite('Comprehensive AgentEngine Tests', () => {
       const extensionConfig = createTestConfig([agentConfig]);
 
       // Create a context that already has the agent in delegation chain
-      const parentContext: AgentExecutionContext = {
-        agentName: 'parent-agent',
-        conversationId: 'parent-123',
-        systemPrompt: 'Parent prompt',
-        availableTools: [],
-        delegationChain: ['circular-agent'], // Agent already in chain
-        availableDelegationTargets: []
-      };
+      const parentAgent = createTestAgent('parent-agent');
+      const parentContext = await agentEngine.initializeAgent(parentAgent);
+      parentContext.delegationChain = ['circular-agent']; // Agent already in chain
 
       await assert.rejects(
         () => (agentEngine as any).initializeChildAgent(agentConfig, parentContext, extensionConfig),

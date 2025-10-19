@@ -37,6 +37,48 @@ export interface AgentExecutionContext {
   availableTools: any[]; // Will be typed as vscode.LanguageModelTool[] when available
   delegationChain: string[];
   availableDelegationTargets: DelegationTarget[];
+  // Agentic loop properties
+  model?: any; // Will be typed as vscode.LanguageModelChat when available
+  conversation: any[]; // Will be typed as vscode.LanguageModelChatMessage[] when available
+  isAgenticLoop: boolean;
+  toolInvocations: ToolInvocation[];
+  loopState: AgentLoopState;
+}
+
+/**
+ * Tool invocation tracking for agentic loops
+ */
+export interface ToolInvocation {
+  toolName: string;
+  parameters: any;
+  result: any;
+  timestamp: Date;
+  executionTime?: number;
+}
+
+/**
+ * Agent loop state for tracking execution progress
+ */
+export interface AgentLoopState {
+  isActive: boolean;
+  iterationCount: number;
+  maxIterations: number;
+  lastToolInvocation?: Date;
+  hasToolInvocations: boolean;
+  reportOutCalled: boolean;
+  reportContent?: string;
+}
+
+/**
+ * Result of an agentic loop execution
+ */
+export interface AgentLoopResult {
+  finalResponse: string;
+  toolInvocations: ToolInvocation[];
+  conversationHistory: any[]; // Will be typed as vscode.LanguageModelChatMessage[] when available
+  completed: boolean;
+  iterationCount: number;
+  reportContent?: string;
 }
 
 /**
@@ -45,6 +87,186 @@ export interface AgentExecutionContext {
 export interface ValidationResult {
   isValid: boolean;
   errors: string[];
+}
+
+/**
+ * Conversation management utilities for agentic loops
+ */
+export class ConversationManager {
+  /**
+   * Initializes a conversation with system prompt and initial message
+   */
+  static initializeConversation(systemPrompt: string, initialMessage: string): any[] {
+    // Will be typed as vscode.LanguageModelChatMessage[] when available
+    return [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: initialMessage }
+    ];
+  }
+
+  /**
+   * Adds a message to the conversation
+   */
+  static addMessage(conversation: any[], role: 'user' | 'assistant', content: string): void {
+    conversation.push({ role, content });
+  }
+
+  /**
+   * Adds tool invocation result to conversation
+   */
+  static addToolResult(conversation: any[], toolName: string, result: any): void {
+    const resultText = typeof result === 'string' ? result : JSON.stringify(result);
+    conversation.push({ 
+      role: 'user', 
+      content: `Tool ${toolName} result: ${resultText}` 
+    });
+  }
+
+  /**
+   * Gets the last message from conversation
+   */
+  static getLastMessage(conversation: any[]): any | undefined {
+    return conversation.length > 0 ? conversation[conversation.length - 1] : undefined;
+  }
+
+  /**
+   * Clears conversation history while preserving system prompt
+   */
+  static clearHistory(conversation: any[]): void {
+    if (conversation.length > 0 && conversation[0].role === 'system') {
+      const systemPrompt = conversation[0];
+      conversation.length = 0;
+      conversation.push(systemPrompt);
+    } else {
+      conversation.length = 0;
+    }
+  }
+
+  /**
+   * Creates a copy of conversation for delegation
+   */
+  static copyConversation(conversation: any[]): any[] {
+    return conversation.map(msg => ({ ...msg }));
+  }
+}
+
+/**
+ * Agent loop state management utilities
+ */
+export class AgentLoopStateManager {
+  /**
+   * Creates initial loop state
+   */
+  static createInitialState(maxIterations: number = 50): AgentLoopState {
+    return {
+      isActive: false,
+      iterationCount: 0,
+      maxIterations,
+      hasToolInvocations: false,
+      reportOutCalled: false
+    };
+  }
+
+  /**
+   * Updates loop state for new iteration
+   */
+  static startIteration(state: AgentLoopState): void {
+    state.isActive = true;
+    state.iterationCount++;
+    state.hasToolInvocations = false;
+  }
+
+  /**
+   * Records tool invocation in loop state
+   */
+  static recordToolInvocation(state: AgentLoopState, toolName: string): void {
+    state.hasToolInvocations = true;
+    state.lastToolInvocation = new Date();
+    
+    if (toolName === 'reportOut') {
+      state.reportOutCalled = true;
+    }
+  }
+
+  /**
+   * Completes the loop
+   */
+  static completeLoop(state: AgentLoopState, reportContent?: string): void {
+    state.isActive = false;
+    if (reportContent) {
+      state.reportContent = reportContent;
+    }
+  }
+
+  /**
+   * Checks if loop should continue
+   */
+  static shouldContinueLoop(state: AgentLoopState): boolean {
+    return state.isActive && 
+           state.iterationCount < state.maxIterations && 
+           !state.reportOutCalled;
+  }
+
+  /**
+   * Checks if max iterations reached
+   */
+  static hasReachedMaxIterations(state: AgentLoopState): boolean {
+    return state.iterationCount >= state.maxIterations;
+  }
+}
+
+/**
+ * Tool invocation tracking utilities
+ */
+export class ToolInvocationTracker {
+  /**
+   * Creates a tool invocation record
+   */
+  static createInvocation(
+    toolName: string, 
+    parameters: any, 
+    result: any, 
+    executionTime?: number
+  ): ToolInvocation {
+    return {
+      toolName,
+      parameters,
+      result,
+      timestamp: new Date(),
+      executionTime
+    };
+  }
+
+  /**
+   * Adds tool invocation to context
+   */
+  static addInvocation(context: AgentExecutionContext, invocation: ToolInvocation): void {
+    context.toolInvocations.push(invocation);
+    AgentLoopStateManager.recordToolInvocation(context.loopState, invocation.toolName);
+  }
+
+  /**
+   * Gets tool invocations by name
+   */
+  static getInvocationsByTool(context: AgentExecutionContext, toolName: string): ToolInvocation[] {
+    return context.toolInvocations.filter(inv => inv.toolName === toolName);
+  }
+
+  /**
+   * Gets total execution time for all tools
+   */
+  static getTotalExecutionTime(context: AgentExecutionContext): number {
+    return context.toolInvocations.reduce((total, inv) => {
+      return total + (inv.executionTime || 0);
+    }, 0);
+  }
+
+  /**
+   * Clears tool invocation history
+   */
+  static clearInvocations(context: AgentExecutionContext): void {
+    context.toolInvocations.length = 0;
+  }
 }
 
 /**
