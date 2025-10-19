@@ -1,63 +1,74 @@
-# Troubleshooting Guide
+# Copilot Multi-Agent Troubleshooting Guide
 
-This guide helps you diagnose and resolve common issues with the Copilot Multi-Agent extension.
+This guide provides detailed troubleshooting steps for common issues with the Copilot Multi-Agent extension.
 
-## Quick Diagnostics
+## Table of Contents
 
-### Check Extension Status
-1. Open VS Code Command Palette (Cmd/Ctrl + Shift + P)
-2. Run "Extensions: Show Installed Extensions"
-3. Verify "Copilot Multi-Agent" is installed and enabled
-4. Check that "GitHub Copilot Chat" is also installed and enabled
+- [Installation and Setup Issues](#installation-and-setup-issues)
+- [Configuration Problems](#configuration-problems)
+- [Entry Agent Issues](#entry-agent-issues)
+- [Delegation Problems](#delegation-problems)
+- [Tool Access Issues](#tool-access-issues)
+- [Performance Issues](#performance-issues)
+- [Error Messages](#error-messages)
+- [Advanced Debugging](#advanced-debugging)
 
-### Check Configuration
-1. Open VS Code Settings (Cmd/Ctrl + ,)
-2. Search for "Copilot Multi-Agent"
-3. Verify configuration is valid (no red error indicators)
-4. Check Output panel (View → Output → "Copilot Multi-Agent") for errors
+## Installation and Setup Issues
 
-## Common Issues
-
-### 1. Extension Not Loading
+### Extension Not Loading
 
 **Symptoms:**
-- Multi-agent chat participant doesn't appear
-- No response when using `@multi-agent`
-- Extension appears inactive
+- Multi-agent chat participant doesn't appear in Copilot Chat
+- No `@multi-agent` option available
+- Extension appears installed but not functional
 
-**Causes & Solutions:**
+**Diagnostic Steps:**
+1. Check VS Code version: Requires 1.105.0 or higher
+2. Verify GitHub Copilot Chat extension is installed and active
+3. Check extension status in Extensions panel
+4. Look for error messages in Output panel
 
-#### Missing Dependencies
-- **Check**: Ensure GitHub Copilot Chat extension is installed
-- **Fix**: Install GitHub Copilot Chat from VS Code Marketplace
-- **Verify**: Restart VS Code after installation
+**Solutions:**
+1. **Update VS Code**: Ensure you're running version 1.105.0 or higher
+2. **Install GitHub Copilot Chat**: This extension is required as a dependency
+3. **Reload VS Code**: Use Cmd/Ctrl + Shift + P → "Developer: Reload Window"
+4. **Check Output Panel**: View → Output → Select "Copilot Multi-Agent" from dropdown
+5. **Reinstall Extension**: Uninstall and reinstall the Copilot Multi-Agent extension
 
-#### VS Code Version Compatibility
-- **Check**: VS Code version 1.105.0 or higher required
-- **Fix**: Update VS Code to latest version
-- **Verify**: Help → About to check version
-
-#### Extension Activation Failure
-- **Check**: Output panel for activation errors
-- **Fix**: Reload VS Code window (Cmd/Ctrl + Shift + P → "Developer: Reload Window")
-- **Verify**: Check extension status in Extensions panel
-
-### 2. Configuration Errors
+### GitHub Copilot Chat Integration Issues
 
 **Symptoms:**
-- Red error indicators in settings
-- Agents not working as expected
-- Validation error messages
+- Copilot Chat works but multi-agent doesn't appear
+- Error messages about missing chat participant API
 
-**Common Configuration Issues:**
+**Solutions:**
+1. Ensure GitHub Copilot Chat extension is enabled and authenticated
+2. Check that you have an active GitHub Copilot subscription
+3. Restart VS Code after installing both extensions
+4. Verify no conflicting extensions are interfering with chat functionality
+
+## Configuration Problems
+
+### Configuration Validation Errors
+
+**Symptoms:**
+- Settings show validation errors
+- Agents not appearing or functioning
+- Red error indicators in settings UI
+
+**Common Validation Issues:**
 
 #### Invalid Agent Names
 ```json
 // ❌ Invalid - contains spaces and special characters
-"name": "code reviewer!"
+{
+  "name": "My Agent #1"
+}
 
 // ✅ Valid - letters, numbers, hyphens, underscores only
-"name": "code-reviewer"
+{
+  "name": "my-agent-1"
+}
 ```
 
 #### Missing Required Fields
@@ -70,296 +81,388 @@ This guide helps you diagnose and resolve common issues with the Copilot Multi-A
 // ✅ Valid - all required fields present
 {
   "name": "test-agent",
-  "systemPrompt": "You are a test specialist...",
-  "description": "Specialized in testing",
-  "useFor": "Unit and integration testing",
+  "systemPrompt": "You are a test agent...",
+  "description": "Test agent for validation",
+  "useFor": "Testing and validation tasks",
   "delegationPermissions": {"type": "none"},
   "toolPermissions": {"type": "specific", "tools": ["reportOut"]}
 }
 ```
 
-#### Invalid Delegation References
+#### Invalid Permission References
 ```json
 // ❌ Invalid - references non-existent agent
-"delegationPermissions": {
-  "type": "specific",
-  "agents": ["non-existent-agent"]
+{
+  "delegationPermissions": {
+    "type": "specific",
+    "agents": ["non-existent-agent"]
+  }
 }
 
 // ✅ Valid - references existing agent
-"delegationPermissions": {
-  "type": "specific", 
-  "agents": ["code-reviewer"]
-}
-```
-
-#### Duplicate Agent Names
-```json
-// ❌ Invalid - duplicate names
-"customAgents": [
-  {"name": "reviewer", ...},
-  {"name": "reviewer", ...}  // Duplicate!
-]
-
-// ✅ Valid - unique names
-"customAgents": [
-  {"name": "code-reviewer", ...},
-  {"name": "test-reviewer", ...}
-]
-```
-
-### 3. Delegation Issues
-
-**Symptoms:**
-- Agents cannot delegate work
-- "Permission denied" errors
-- Delegation requests ignored
-
-**Diagnosis & Solutions:**
-
-#### Check Delegation Permissions
-```json
-// Ensure delegating agent has permission
 {
-  "name": "coordinator",
   "delegationPermissions": {
-    "type": "all"  // or specific agents
-  }
-}
-```
-
-#### Verify Target Agent Exists
-- Check that target agent name matches exactly
-- Ensure target agent is in customAgents array
-- Verify no typos in agent names
-
-#### Check Tool Permissions
-```json
-// Delegating agent needs delegateWork tool
-{
-  "toolPermissions": {
     "type": "specific",
-    "tools": ["delegateWork", "reportOut"]
+    "agents": ["code-reviewer"]
   }
 }
 ```
 
-#### Circular Delegation Detection
-- The system prevents A → B → A delegation loops
-- Check delegation chain for circular references
-- Redesign delegation flow to avoid loops
+### Configuration Reset
 
-### 4. Tool Access Issues
+If your configuration becomes corrupted or you want to start fresh:
 
-**Symptoms:**
-- Agents cannot access expected tools
-- "Tool not available" errors
-- Limited functionality
-- Coordinator shows "Tools Available 2" instead of configured tools
-
-**Root Cause:**
-The tool filter may not be initialized with actual GitHub Copilot tools, showing only the 2 custom delegation tools (`delegateWork` and `reportOut`).
-
-**Solutions:**
-
-#### Coordinator Name Configuration Issue
-**Problem**: VS Code shows error "property name is not allowed" for coordinator configuration, but runtime shows "coordinator.name: Must be 'coordinator', got 'undefined'"
-
-**Solution**: This is expected behavior. The coordinator configuration in VS Code settings should NOT include a "name" property. The extension automatically sets the name to "coordinator" when loading the configuration. Simply configure the coordinator without the name field:
-
-```json
-{
-  "copilotMultiAgent.coordinator": {
-    "systemPrompt": "Your coordinator prompt...",
-    "description": "Coordinator description",
-    "useFor": "Task orchestration and delegation",
-    "delegationPermissions": { "type": "all" },
-    "toolPermissions": { "type": "specific", "tools": ["delegateWork", "reportOut"] }
-  }
-}
-```
-
-#### Refresh Available Tools
-If you see only 2 tools available (delegation tools), try refreshing the tool discovery:
-
-1. Open Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`)
-2. Run: `Multi-Agent: Refresh Available Tools`
-3. Check the status: `Multi-Agent: Show Extension Status`
-
-#### Check Tool Permissions
-```json
-// Grant access to specific tools
-{
-  "toolPermissions": {
-    "type": "specific",
-    "tools": ["workspace", "reportOut"]
-  }
-}
-
-// Or grant access to all tools
-{
-  "toolPermissions": {
-    "type": "all"
-  }
-}
-```
-
-#### Verify Tool Names
-Common tool names:
-- `workspace` - File system access
-- `delegateWork` - Task delegation
-- `reportOut` - Report results
-- GitHub Copilot tools (varies by version)
-
-#### GitHub Copilot Integration
-- Ensure GitHub Copilot Chat is working normally
-- Test with regular `@copilot` commands first
-- Check GitHub Copilot subscription status
-
-### 5. Performance Issues
-
-**Symptoms:**
-- Slow response times
-- High memory usage
-- VS Code becomes unresponsive
-
-**Optimization Strategies:**
-
-#### Reduce Agent Complexity
-- Simplify system prompts
-- Limit number of custom agents (5-10 recommended)
-- Use specific tool permissions instead of "all"
-
-#### Optimize Delegation Chains
-- Avoid deep delegation chains (max 2-3 levels)
-- Use direct agent calls when possible
-- Monitor delegation patterns
-
-#### System Resources
-- Close unnecessary VS Code windows
-- Restart VS Code periodically
-- Check system memory usage
-
-## Advanced Troubleshooting
-
-### Enable Debug Logging
-
-1. Open VS Code Settings
-2. Search for "log level"
-3. Set "Log Level" to "Debug" or "Trace"
-4. Check Output panel for detailed logs
-
-### Reset Configuration
-
-If configuration becomes corrupted:
-
-1. **Backup Current Config**:
-   ```json
-   // Copy current settings from VS Code Settings UI
-   ```
+1. **Backup Current Configuration** (optional):
+   - Go to VS Code Settings
+   - Search for "copilotMultiAgent"
+   - Copy current JSON configuration
 
 2. **Reset to Defaults**:
    - Delete all `copilotMultiAgent.*` settings
    - Reload VS Code
    - Reconfigure from scratch
 
-3. **Restore from Backup**:
-   - Use Settings Sync if enabled
-   - Manually restore from backup
+3. **Import Working Configuration**:
+   - Use one of the example configurations from the `examples/` directory
+   - Copy the JSON content into VS Code settings
 
-### Check Extension Logs
+## Entry Agent Issues
 
-1. Open Command Palette (Cmd/Ctrl + Shift + P)
-2. Run "Developer: Show Logs"
-3. Select "Extension Host"
-4. Look for Copilot Multi-Agent related errors
+### Entry Agent Not Found
 
-### Reinstall Extension
+**Symptoms:**
+- Warning messages about entry agent not found
+- System falls back to first agent
+- Unexpected agent handling initial conversations
 
-If all else fails:
+**Diagnostic Steps:**
+1. Check the `copilotMultiAgent.entryAgent` setting value
+2. Verify the agent name exists in the `copilotMultiAgent.agents` array
+3. Ensure exact name matching (case-sensitive)
 
-1. Uninstall Copilot Multi-Agent extension
-2. Restart VS Code
-3. Reinstall from Marketplace
-4. Reconfigure settings
+**Solutions:**
+
+#### Fix Entry Agent Setting
+```json
+// Check that entry agent name matches exactly
+{
+  "copilotMultiAgent.entryAgent": "coordinator",
+  "copilotMultiAgent.agents": [
+    {
+      "name": "coordinator",  // Must match exactly
+      // ... other configuration
+    }
+  ]
+}
+```
+
+#### Use Automatic Entry Agent
+```json
+// Remove entry agent setting to use first agent automatically
+{
+  // "copilotMultiAgent.entryAgent": "coordinator", // Remove this line
+  "copilotMultiAgent.agents": [
+    {
+      "name": "coordinator",  // This will become the entry agent
+      // ... other configuration
+    }
+  ]
+}
+```
+
+### Entry Agent Permissions Issues
+
+**Symptoms:**
+- Entry agent cannot handle basic requests
+- Missing tools or delegation capabilities
+- Unexpected behavior in initial conversations
+
+**Solutions:**
+1. **Ensure Appropriate Tool Permissions**:
+   ```json
+   {
+     "name": "coordinator",
+     "toolPermissions": {
+       "type": "specific",
+       "tools": ["delegateWork", "reportOut", "workspace"]
+     }
+   }
+   ```
+
+2. **Configure Delegation Permissions**:
+   ```json
+   {
+     "name": "coordinator",
+     "delegationPermissions": {"type": "all"}
+   }
+   ```
+
+## Delegation Problems
+
+### Delegation Not Working
+
+**Symptoms:**
+- Agents cannot delegate to other agents
+- "delegateWork" tool not available
+- Delegation attempts fail with errors
+
+**Diagnostic Steps:**
+1. Check delegating agent has "delegateWork" in tool permissions
+2. Verify target agent exists in delegation permissions
+3. Ensure no circular delegation chains
+4. Check for proper agent name spelling
+
+**Solutions:**
+
+#### Fix Tool Permissions
+```json
+{
+  "name": "coordinator",
+  "toolPermissions": {
+    "type": "specific",
+    "tools": ["delegateWork", "reportOut"]  // Include delegateWork
+  }
+}
+```
+
+#### Fix Delegation Permissions
+```json
+// Allow delegation to all agents
+{
+  "delegationPermissions": {"type": "all"}
+}
+
+// Or specify allowed agents
+{
+  "delegationPermissions": {
+    "type": "specific",
+    "agents": ["code-reviewer", "test-engineer"]
+  }
+}
+```
+
+### Circular Delegation Detection
+
+**Symptoms:**
+- Error messages about circular delegation
+- Delegation chains that seem to loop
+
+**Understanding Circular Delegation:**
+```
+Agent A → Agent B → Agent A  // ❌ Circular delegation
+Agent A → Agent B → Agent C  // ✅ Valid delegation chain
+```
+
+**Solutions:**
+1. **Review Delegation Permissions**: Ensure agents don't create loops
+2. **Use Hierarchical Structure**: Design agents with clear delegation hierarchy
+3. **Limit Delegation Depth**: Avoid overly complex delegation chains
+
+### Delegation Chain Limits
+
+The system prevents excessively deep delegation chains for performance and clarity:
+
+- **Maximum Depth**: 5 levels of delegation
+- **Timeout**: 30 seconds per delegation
+- **Memory Limit**: Conversation context is preserved but limited
+
+## Tool Access Issues
+
+### Tools Not Available to Agents
+
+**Symptoms:**
+- Agents report they cannot access expected tools
+- Missing functionality in agent responses
+- Tool permission errors
+
+**Diagnostic Steps:**
+1. Check agent's `toolPermissions` configuration
+2. Verify tool names are spelled correctly
+3. Ensure GitHub Copilot Chat is functioning normally
+
+**Common Tool Permission Configurations:**
+
+#### All Tools Access
+```json
+{
+  "toolPermissions": {"type": "all"}
+}
+```
+
+#### No Tools Access
+```json
+{
+  "toolPermissions": {"type": "none"}
+}
+```
+
+#### Specific Tools Access
+```json
+{
+  "toolPermissions": {
+    "type": "specific",
+    "tools": ["workspace", "reportOut", "delegateWork"]
+  }
+}
+```
+
+### Available Tool Names
+
+Common GitHub Copilot Chat tools that can be specified in permissions:
+- `workspace` - File system access
+- `reportOut` - Multi-agent reporting (custom tool)
+- `delegateWork` - Multi-agent delegation (custom tool)
+
+**Note**: Tool availability depends on your GitHub Copilot Chat version and configuration.
+
+## Performance Issues
+
+### Slow Response Times
+
+**Symptoms:**
+- Long delays in agent responses
+- Timeouts during delegation
+- Poor chat performance
+
+**Diagnostic Steps:**
+1. Check network connectivity to GitHub services
+2. Monitor VS Code performance and memory usage
+3. Review delegation chain complexity
+4. Check system prompt lengths
+
+**Solutions:**
+
+#### Optimize Configuration
+1. **Simplify System Prompts**: Keep prompts concise but effective
+2. **Reduce Delegation Complexity**: Limit delegation chain depth
+3. **Use Specific Tool Permissions**: Avoid "all" permissions when possible
+4. **Limit Agent Count**: Recommended maximum of 10 agents
+
+#### System Optimization
+1. **Restart VS Code**: Clear memory and reset connections
+2. **Check Available Memory**: Ensure sufficient system resources
+3. **Update Extensions**: Keep all extensions up to date
+4. **Network Check**: Verify stable internet connection
+
+### Memory Usage Issues
+
+**Symptoms:**
+- VS Code becomes slow or unresponsive
+- High memory usage in Task Manager
+- Extension crashes or stops responding
+
+**Solutions:**
+1. **Reduce Agent Count**: Limit to 5-10 agents for optimal performance
+2. **Shorten System Prompts**: Keep prompts under 500 words
+3. **Restart VS Code**: Clear accumulated memory usage
+4. **Close Unused Conversations**: End long-running chat sessions
 
 ## Error Messages
 
 ### Common Error Messages and Solutions
 
-#### "Agent not found: [agent-name]"
-- **Cause**: Delegation to non-existent agent
-- **Fix**: Check agent name spelling and ensure agent exists in configuration
-
-#### "Permission denied for delegation"
-- **Cause**: Agent lacks delegation permissions
-- **Fix**: Update delegationPermissions for the agent
-
-#### "Tool not available: [tool-name]"
-- **Cause**: Agent lacks tool permissions
-- **Fix**: Add tool to agent's toolPermissions
+#### "Entry agent 'agent-name' not found in configuration"
+**Cause**: The specified entry agent doesn't exist in the agents array
+**Solution**: Update entry agent setting or add the missing agent
 
 #### "Circular delegation detected"
-- **Cause**: Delegation loop (A → B → A)
-- **Fix**: Redesign delegation flow to avoid loops
+**Cause**: Delegation chain creates a loop (A → B → A)
+**Solution**: Review and fix delegation permissions to avoid loops
+
+#### "Agent 'agent-name' does not have permission to delegate to 'target-agent'"
+**Cause**: Delegation permissions don't include the target agent
+**Solution**: Update delegation permissions or use a different target agent
+
+#### "Tool 'tool-name' not available to agent 'agent-name'"
+**Cause**: Tool permissions don't include the requested tool
+**Solution**: Update tool permissions or use available tools
+
+#### "Maximum delegation depth exceeded"
+**Cause**: Delegation chain is too deep (>5 levels)
+**Solution**: Simplify delegation structure and reduce chain depth
 
 #### "Configuration validation failed"
-- **Cause**: Invalid configuration format
-- **Fix**: Check JSON syntax and required fields
+**Cause**: Invalid configuration format or missing required fields
+**Solution**: Review configuration against schema and fix validation errors
 
-#### "Extension activation failed"
-- **Cause**: Missing dependencies or VS Code version
-- **Fix**: Update VS Code and install GitHub Copilot Chat
+## Advanced Debugging
 
-## Getting Help
+### Enable Debug Logging
 
-### Before Reporting Issues
-
-1. **Check this troubleshooting guide**
-2. **Verify VS Code and extension versions**
-3. **Test with minimal configuration**
-4. **Check Output panel for errors**
-5. **Try reloading VS Code window**
-
-### Reporting Issues
-
-When reporting issues, include:
-
-1. **VS Code version**: Help → About
-2. **Extension version**: Extensions panel
-3. **Configuration**: Sanitized copy of your settings
-4. **Error messages**: From Output panel
-5. **Steps to reproduce**: Detailed reproduction steps
-6. **Expected vs actual behavior**
-
-### Support Channels
-
-- **GitHub Issues**: [Report bugs and feature requests](https://github.com/mvduijnhoven/copilot-multi-agent/issues)
-- **GitHub Discussions**: [Community support and questions](https://github.com/mvduijnhoven/copilot-multi-agent/discussions)
-- **Documentation**: This README and inline help
-
-## Prevention Tips
-
-### Best Practices
-
-1. **Start Simple**: Begin with basic configuration and expand gradually
-2. **Test Changes**: Test configuration changes with simple requests
-3. **Backup Settings**: Use VS Code Settings Sync or manual backups
-4. **Monitor Performance**: Watch for performance degradation
-5. **Keep Updated**: Update VS Code and extensions regularly
+1. **Open Output Panel**: View → Output
+2. **Select Extension**: Choose "Copilot Multi-Agent" from dropdown
+3. **Monitor Logs**: Watch for error messages and warnings during operation
 
 ### Configuration Validation
 
-Always validate configuration changes:
+Use this checklist to validate your configuration:
 
-1. Check for red error indicators in settings
-2. Test with simple delegation requests
-3. Monitor Output panel for warnings
-4. Verify agent names and references
+#### Entry Agent Validation
+- [ ] Entry agent name is specified
+- [ ] Entry agent exists in agents array
+- [ ] Entry agent name matches exactly (case-sensitive)
 
-### Regular Maintenance
+#### Agent Validation
+- [ ] All agents have unique names
+- [ ] Agent names use only valid characters (letters, numbers, hyphens, underscores)
+- [ ] All required fields are present (name, systemPrompt, description, useFor, delegationPermissions, toolPermissions)
+- [ ] System prompts are not empty
+- [ ] Descriptions and useFor fields are descriptive
 
-- Review and optimize agent configurations monthly
-- Clean up unused agents
-- Update system prompts based on usage patterns
-- Monitor delegation patterns for efficiency
+#### Permission Validation
+- [ ] Delegation permissions reference existing agents (for "specific" type)
+- [ ] Tool permissions reference valid tool names (for "specific" type)
+- [ ] No circular delegation chains exist
+- [ ] Entry agent has appropriate permissions for initial conversations
+
+### Testing Configuration
+
+#### Basic Functionality Test
+1. Start a simple conversation with `@multi-agent`
+2. Verify entry agent responds appropriately
+3. Test basic tool access (if configured)
+
+#### Delegation Test
+1. Request a task that should trigger delegation
+2. Verify delegation occurs to appropriate agent
+3. Check that results are reported back correctly
+
+#### Error Handling Test
+1. Try invalid requests to test error handling
+2. Verify graceful degradation when agents fail
+3. Test configuration changes during runtime
+
+### Performance Monitoring
+
+#### Monitor Resource Usage
+1. **Task Manager**: Check VS Code memory and CPU usage
+2. **VS Code Performance**: Help → Toggle Developer Tools → Performance tab
+3. **Network Activity**: Monitor GitHub API calls and response times
+
+#### Optimize Based on Usage Patterns
+1. **Identify Bottlenecks**: Which agents or operations are slowest?
+2. **Adjust Configuration**: Optimize based on actual usage patterns
+3. **Monitor Improvements**: Track performance after configuration changes
+
+## Getting Help
+
+If you continue to experience issues after following this troubleshooting guide:
+
+### Community Support
+- **GitHub Issues**: [Report bugs and request features](https://github.com/mvduijnhoven/copilot-multi-agent/issues)
+- **GitHub Discussions**: [Ask questions and share experiences](https://github.com/mvduijnhoven/copilot-multi-agent/discussions)
+
+### Before Reporting Issues
+Please include the following information:
+1. **VS Code Version**: Help → About
+2. **Extension Version**: Check Extensions panel
+3. **Configuration**: Sanitized copy of your agent configuration
+4. **Error Messages**: Copy from Output panel
+5. **Steps to Reproduce**: Detailed steps that trigger the issue
+6. **Expected vs Actual Behavior**: What should happen vs what actually happens
+
+### Configuration Sharing
+When sharing configurations for troubleshooting:
+1. **Remove Sensitive Information**: Don't share personal system prompts or proprietary information
+2. **Use Minimal Examples**: Create a minimal configuration that reproduces the issue
+3. **Test with Examples**: Try the provided example configurations to isolate the problem

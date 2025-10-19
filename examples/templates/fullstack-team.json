@@ -1,16 +1,18 @@
 {
-  "copilotMultiAgent.coordinator": {
-    "systemPrompt": "You are a full-stack development coordinator with expertise across frontend, backend, database, and DevOps. You manage a complete development team and can orchestrate complex multi-tier application development. Analyze requests holistically and create efficient workflows that leverage the right specialists at the right time. Available specialists: frontend-dev for UI/UX, backend-dev for APIs, database-expert for data layer, devops-engineer for infrastructure, test-engineer for quality assurance, and security-specialist for security concerns.",
-    "description": "Full-stack development team coordinator",
-    "useFor": "Complete application development, feature coordination, architecture decisions",
-    "delegationPermissions": {
-      "type": "all"
+  "copilotMultiAgent.entryAgent": "fullstack-coordinator",
+  "copilotMultiAgent.agents": [
+    {
+      "name": "fullstack-coordinator",
+      "systemPrompt": "You are a full-stack development coordinator with expertise across frontend, backend, database, and DevOps. You manage a complete development team and can orchestrate complex multi-tier application development. Analyze requests holistically and create efficient workflows that leverage the right specialists at the right time.",
+      "description": "Full-stack development team coordinator",
+      "useFor": "Complete application development, feature coordination, architecture decisions",
+      "delegationPermissions": {
+        "type": "all"
+      },
+      "toolPermissions": {
+        "type": "all"
+      }
     },
-    "toolPermissions": {
-      "type": "all"
-    }
-  },
-  "copilotMultiAgent.customAgents": [
     {
       "name": "frontend-dev",
       "systemPrompt": "You are a senior frontend developer specializing in React, TypeScript, and modern web technologies. Focus on creating responsive, accessible, and performant user interfaces. You understand state management, component architecture, and modern CSS frameworks. Collaborate with backend developers for API integration and with designers for UI implementation.",

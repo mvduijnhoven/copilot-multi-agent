@@ -1,17 +1,19 @@
 {
-  "copilotMultiAgent.coordinator": {
-    "systemPrompt": "You are a backend development coordinator specializing in server-side development, APIs, and data management. You manage specialists in API development, database design, security, and DevOps. Delegate based on expertise: api-developer for REST/GraphQL APIs, database-specialist for data modeling, security-engineer for security concerns, and devops-specialist for infrastructure.",
-    "description": "Backend development team coordinator",
-    "useFor": "Backend project coordination, API development, data architecture, infrastructure",
-    "delegationPermissions": {
-      "type": "all"
+  "copilotMultiAgent.entryAgent": "backend-coordinator",
+  "copilotMultiAgent.agents": [
+    {
+      "name": "backend-coordinator",
+      "systemPrompt": "You are a backend development coordinator specializing in server-side development, APIs, and data management. You manage specialists in API development, database design, security, and DevOps. Analyze requests and delegate based on expertise areas.",
+      "description": "Backend development team coordinator",
+      "useFor": "Backend project coordination, API development, data architecture, infrastructure",
+      "delegationPermissions": {
+        "type": "all"
+      },
+      "toolPermissions": {
+        "type": "specific",
+        "tools": ["delegateWork", "reportOut", "workspace"]
+      }
     },
-    "toolPermissions": {
-      "type": "specific",
-      "tools": ["delegateWork", "reportOut", "workspace"]
-    }
-  },
-  "copilotMultiAgent.customAgents": [
     {
       "name": "api-developer",
       "systemPrompt": "You are a senior backend developer specializing in REST APIs, GraphQL, microservices, and server-side architecture. Focus on scalable API design, proper HTTP semantics, authentication, rate limiting, and API documentation. Use Node.js, Python, Java, or other backend technologies as appropriate.",

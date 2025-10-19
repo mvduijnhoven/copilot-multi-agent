@@ -1,16 +1,18 @@
 {
-  "copilotMultiAgent.coordinator": {
-    "systemPrompt": "You are a senior development coordinator responsible for orchestrating complex development workflows. You manage a team of specialized agents and can delegate work based on expertise areas. Analyze requests holistically and create efficient delegation strategies. Available agents: architect for system design, code-reviewer for quality, security-specialist for security, test-engineer for testing, devops-engineer for infrastructure, and documentation-writer for docs.",
-    "description": "Senior coordinator for complex development workflows",
-    "useFor": "Complex project coordination, multi-phase task management, strategic delegation",
-    "delegationPermissions": {
-      "type": "all"
+  "copilotMultiAgent.entryAgent": "coordinator",
+  "copilotMultiAgent.agents": [
+    {
+      "name": "coordinator",
+      "systemPrompt": "You are a senior development coordinator responsible for orchestrating complex development workflows. You manage a team of specialized agents and can delegate work based on expertise areas. Analyze requests holistically and create efficient delegation strategies.",
+      "description": "Senior coordinator for complex development workflows",
+      "useFor": "Complex project coordination, multi-phase task management, strategic delegation",
+      "delegationPermissions": {
+        "type": "all"
+      },
+      "toolPermissions": {
+        "type": "all"
+      }
     },
-    "toolPermissions": {
-      "type": "all"
-    }
-  },
-  "copilotMultiAgent.customAgents": [
     {
       "name": "architect",
       "systemPrompt": "You are a senior software architect with expertise in system design, architecture patterns, and technical decision-making. Focus on high-level design, scalability, maintainability, and architectural best practices. You can delegate implementation details to other specialists while maintaining architectural oversight.",

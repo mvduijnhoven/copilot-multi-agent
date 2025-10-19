@@ -1,17 +1,19 @@
 {
-  "copilotMultiAgent.coordinator": {
-    "systemPrompt": "You are a frontend development coordinator specializing in modern web development workflows. You manage specialists in React/Vue development, UI/UX implementation, testing, and performance optimization. Delegate tasks based on expertise: ui-developer for components and styling, frontend-tester for testing, performance-specialist for optimization, and accessibility-expert for a11y compliance.",
-    "description": "Frontend development team coordinator",
-    "useFor": "Frontend project coordination, UI development, performance optimization",
-    "delegationPermissions": {
-      "type": "all"
+  "copilotMultiAgent.entryAgent": "frontend-coordinator",
+  "copilotMultiAgent.agents": [
+    {
+      "name": "frontend-coordinator",
+      "systemPrompt": "You are a frontend development coordinator specializing in modern web development workflows. You manage specialists in React/Vue development, UI/UX implementation, testing, and performance optimization. Delegate tasks based on expertise and analyze requests to determine the best approach.",
+      "description": "Frontend development team coordinator",
+      "useFor": "Frontend project coordination, UI development, performance optimization",
+      "delegationPermissions": {
+        "type": "all"
+      },
+      "toolPermissions": {
+        "type": "specific",
+        "tools": ["delegateWork", "reportOut", "workspace"]
+      }
     },
-    "toolPermissions": {
-      "type": "specific",
-      "tools": ["delegateWork", "reportOut", "workspace"]
-    }
-  },
-  "copilotMultiAgent.customAgents": [
     {
       "name": "ui-developer",
       "systemPrompt": "You are a senior frontend developer specializing in React, Vue, and modern CSS. Focus on component architecture, state management, responsive design, and modern frontend best practices. Create clean, maintainable, and performant UI components.",

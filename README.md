@@ -1,13 +1,14 @@
 # Copilot Multi-Agent
 
-Enhance GitHub Copilot Chat with sophisticated multi-agent capabilities. Configure specialized AI agents for different development tasks and enable advanced task delegation workflows within VS Code.
+Enhance GitHub Copilot Chat with sophisticated multi-agent capabilities. Configure multiple specialized AI agents for different development tasks, designate an entry agent for initial conversations, and enable advanced task delegation workflows within VS Code.
 
 ## Features
 
-- **Multi-Agent Coordination**: Configure a coordinator agent that orchestrates work between specialized agents
-- **Custom Agent Configuration**: Create and configure multiple specialized agents for different development tasks
+- **Entry Agent Configuration**: Designate any agent as the entry point for chat conversations
+- **Multi-Agent System**: Configure multiple specialized agents for different development tasks
 - **Intelligent Task Delegation**: Agents can delegate work to other agents using built-in delegation tools
 - **Flexible Tool Permissions**: Control which GitHub Copilot tools each agent can access
+- **Dynamic System Prompts**: Agents automatically receive information about available delegation targets
 - **Seamless Integration**: Works within the existing GitHub Copilot Chat interface
 - **User-Friendly Settings**: Configure agents through VS Code's settings interface
 
@@ -28,28 +29,34 @@ Enhance GitHub Copilot Chat with sophisticated multi-agent capabilities. Configu
 
 1. **Open Settings**: Go to VS Code Settings (Cmd/Ctrl + ,) and search for "Copilot Multi-Agent"
 
-2. **Configure Coordinator**: The coordinator agent is pre-configured but can be customized:
+2. **Configure Agents**: Create your agent team:
    ```json
    {
-     "copilotMultiAgent.coordinator": {
-       "systemPrompt": "You are a coordinator agent responsible for orchestrating tasks...",
-       "description": "Coordinates work between specialized agents",
-       "useFor": "Task orchestration and delegation"
-     }
-   }
-   ```
-
-3. **Add Custom Agents**: Create specialized agents for your workflow:
-   ```json
-   {
-     "copilotMultiAgent.customAgents": [
+     "copilotMultiAgent.agents": [
+       {
+         "name": "coordinator",
+         "systemPrompt": "You are a coordinator agent responsible for orchestrating tasks...",
+         "description": "Coordinates work between specialized agents",
+         "useFor": "Task orchestration and delegation",
+         "delegationPermissions": {"type": "all"},
+         "toolPermissions": {"type": "specific", "tools": ["delegateWork", "reportOut"]}
+       },
        {
          "name": "code-reviewer",
          "systemPrompt": "You are a code review specialist...",
          "description": "Specialized in code review and quality analysis",
-         "useFor": "Code review, security analysis, best practices"
+         "useFor": "Code review, security analysis, best practices",
+         "delegationPermissions": {"type": "none"},
+         "toolPermissions": {"type": "specific", "tools": ["reportOut", "workspace"]}
        }
      ]
+   }
+   ```
+
+3. **Set Entry Agent**: Designate which agent handles initial conversations:
+   ```json
+   {
+     "copilotMultiAgent.entryAgent": "coordinator"
    }
    ```
 
@@ -57,23 +64,19 @@ Enhance GitHub Copilot Chat with sophisticated multi-agent capabilities. Configu
 
 ## Configuration
 
-### Coordinator Agent
+### Entry Agent Setting
 
-The coordinator agent orchestrates work between specialized agents. Configure it in VS Code settings:
-
-> **Note**: Do not include a "name" property in the coordinator configuration. The extension automatically sets the name to "coordinator".
+The entry agent handles initial chat conversations and serves as the primary interface:
 
 | Setting | Description | Default |
 |---------|-------------|---------|
-| `systemPrompt` | Defines the coordinator's behavior and capabilities | Pre-configured delegation prompt |
-| `description` | Brief description of the coordinator's purpose | "Coordinates work between specialized agents" |
-| `useFor` | Description of tasks the coordinator handles | "Task orchestration and delegation" |
-| `delegationPermissions` | Controls which agents can be delegated to | `{"type": "all"}` |
-| `toolPermissions` | Controls which tools the coordinator can access | Delegation tools enabled |
+| `copilotMultiAgent.entryAgent` | Name of the agent to handle initial conversations | First agent in the agents array |
 
-### Custom Agents
+If no entry agent is specified or the specified agent is not found, the system automatically uses the first configured agent as the entry agent.
 
-Create specialized agents for different development tasks:
+### Agent Configuration
+
+All agents (including the entry agent) are configured in the `copilotMultiAgent.agents` array:
 
 | Setting | Description | Required |
 |---------|-------------|----------|
@@ -108,43 +111,62 @@ Example specific permissions:
 
 ## Example Agent Configurations
 
-### Code Review Specialist
+### Complete Configuration Example
 ```json
 {
-  "name": "code-reviewer",
-  "systemPrompt": "You are a senior code reviewer with expertise in software engineering best practices, security, and code quality. Focus on identifying potential issues, suggesting improvements, and ensuring code follows established patterns and conventions.",
-  "description": "Specialized in code review and quality analysis",
-  "useFor": "Code review, security analysis, best practices, refactoring suggestions",
-  "delegationPermissions": {"type": "none"},
-  "toolPermissions": {"type": "specific", "tools": ["reportOut", "workspace"]}
+  "copilotMultiAgent.entryAgent": "coordinator",
+  "copilotMultiAgent.agents": [
+    {
+      "name": "coordinator",
+      "systemPrompt": "You are a coordinator agent responsible for orchestrating development tasks and delegating work to specialized agents. Analyze the user's request and determine the best approach: handle directly for simple tasks, or delegate to specialized agents for complex work.",
+      "description": "Coordinates work between specialized agents",
+      "useFor": "Task orchestration and delegation",
+      "delegationPermissions": {"type": "all"},
+      "toolPermissions": {"type": "specific", "tools": ["delegateWork", "reportOut", "workspace"]}
+    },
+    {
+      "name": "code-reviewer",
+      "systemPrompt": "You are a senior code reviewer with expertise in software engineering best practices, security, and code quality. Focus on identifying potential issues, suggesting improvements, and ensuring code follows established patterns and conventions.",
+      "description": "Specialized in code review and quality analysis",
+      "useFor": "Code review, security analysis, best practices, refactoring suggestions",
+      "delegationPermissions": {"type": "none"},
+      "toolPermissions": {"type": "specific", "tools": ["reportOut", "workspace"]}
+    },
+    {
+      "name": "documentation-writer", 
+      "systemPrompt": "You are a technical documentation specialist. Create clear, comprehensive documentation including README files, API docs, code comments, and user guides. Focus on clarity, completeness, and accessibility.",
+      "description": "Specialized in creating technical documentation",
+      "useFor": "README files, API documentation, code comments, user guides",
+      "delegationPermissions": {"type": "none"},
+      "toolPermissions": {"type": "specific", "tools": ["reportOut", "workspace"]}
+    },
+    {
+      "name": "test-engineer",
+      "systemPrompt": "You are a test automation specialist with expertise in unit testing, integration testing, and test-driven development. Create comprehensive test suites, identify edge cases, and ensure proper test coverage.",
+      "description": "Specialized in test creation and automation",
+      "useFor": "Unit tests, integration tests, test automation, TDD",
+      "delegationPermissions": {"type": "specific", "agents": ["code-reviewer"]},
+      "toolPermissions": {"type": "specific", "tools": ["reportOut", "workspace", "delegateWork"]}
+    }
+  ]
 }
 ```
 
-### Documentation Writer
+### Individual Agent Examples
+
+#### Coordinator Agent (Entry Agent)
 ```json
 {
-  "name": "documentation-writer", 
-  "systemPrompt": "You are a technical documentation specialist. Create clear, comprehensive documentation including README files, API docs, code comments, and user guides. Focus on clarity, completeness, and accessibility.",
-  "description": "Specialized in creating technical documentation",
-  "useFor": "README files, API documentation, code comments, user guides",
-  "delegationPermissions": {"type": "none"},
-  "toolPermissions": {"type": "specific", "tools": ["reportOut", "workspace"]}
+  "name": "coordinator",
+  "systemPrompt": "You are a coordinator agent responsible for orchestrating development tasks and delegating work to specialized agents. Analyze the user's request and determine the best approach: handle directly for simple tasks, or delegate to specialized agents for complex work.",
+  "description": "Coordinates work between specialized agents",
+  "useFor": "Task orchestration and delegation",
+  "delegationPermissions": {"type": "all"},
+  "toolPermissions": {"type": "specific", "tools": ["delegateWork", "reportOut", "workspace"]}
 }
 ```
 
-### Test Engineer
-```json
-{
-  "name": "test-engineer",
-  "systemPrompt": "You are a test automation specialist with expertise in unit testing, integration testing, and test-driven development. Create comprehensive test suites, identify edge cases, and ensure proper test coverage.",
-  "description": "Specialized in test creation and automation",
-  "useFor": "Unit tests, integration tests, test automation, TDD",
-  "delegationPermissions": {"type": "specific", "agents": ["code-reviewer"]},
-  "toolPermissions": {"type": "specific", "tools": ["reportOut", "workspace", "delegateWork"]}
-}
-```
-
-### DevOps Engineer
+#### DevOps Engineer
 ```json
 {
   "name": "devops-engineer",
@@ -156,7 +178,7 @@ Example specific permissions:
 }
 ```
 
-### Security Specialist
+#### Security Specialist
 ```json
 {
   "name": "security-specialist",
@@ -206,19 +228,30 @@ While the coordinator handles most interactions, you can reference specific agen
 
 **Solutions**:
 1. Verify agent names use only letters, numbers, hyphens, and underscores
-2. Ensure all required fields are filled
+2. Ensure all required fields are filled in the agents array
 3. Check that delegation permissions reference existing agent names
 4. Validate JSON syntax in settings
-5. Reset to default configuration if needed
+5. Verify entry agent name matches an agent in the agents array
+6. Reset to default configuration if needed
+
+#### Entry Agent Issues
+**Problem**: Entry agent not found or not working as expected
+
+**Solutions**:
+1. Verify the `entryAgent` setting matches an agent name in the `agents` array exactly
+2. Check that the specified entry agent exists and is properly configured
+3. If no entry agent is set, the first agent in the array will be used automatically
+4. Ensure the entry agent has appropriate tool permissions for initial conversations
 
 #### Delegation Not Working
 **Problem**: Agents cannot delegate work to other agents
 
 **Solutions**:
-1. Verify coordinator has delegation permissions set to "all" or includes target agents
-2. Check that target agents exist in custom agents configuration
+1. Verify the delegating agent has delegation permissions set to "all" or includes target agents
+2. Check that target agents exist in the agents array
 3. Ensure delegating agent has "delegateWork" tool permission
 4. Check for circular delegation (Agent A → Agent B → Agent A)
+5. Verify agent names in delegation permissions match exactly (case-sensitive)
 
 #### Tool Access Issues
 **Problem**: Agents cannot access expected GitHub Copilot tools
@@ -269,6 +302,12 @@ A: No, configuration changes are applied immediately. However, ongoing conversat
 
 **Q: Can I export and share agent configurations?**
 A: Yes, agent configurations are stored in VS Code settings and can be exported via Settings Sync or by copying the JSON configuration.
+
+**Q: What happens if I don't set an entry agent?**
+A: The system automatically uses the first agent in the agents array as the entry agent. You'll see a warning in the logs, but the system will continue to function normally.
+
+**Q: Can I change the entry agent during runtime?**
+A: Yes, you can change the entry agent setting at any time. The change takes effect immediately for new conversations.
 
 ### Technical Questions
 

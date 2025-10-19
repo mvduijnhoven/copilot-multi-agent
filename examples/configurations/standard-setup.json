@@ -1,17 +1,19 @@
 {
-  "copilotMultiAgent.coordinator": {
-    "systemPrompt": "You are a coordinator agent responsible for orchestrating development tasks and delegating work to specialized agents. Analyze the user's request and determine the best approach: handle directly for simple tasks, or delegate to specialized agents for complex work. Available agents: code-reviewer for code quality, documentation-writer for docs, and test-engineer for testing tasks.",
-    "description": "Coordinates work between specialized development agents",
-    "useFor": "Task orchestration, delegation, and general development assistance",
-    "delegationPermissions": {
-      "type": "all"
+  "copilotMultiAgent.entryAgent": "coordinator",
+  "copilotMultiAgent.agents": [
+    {
+      "name": "coordinator",
+      "systemPrompt": "You are a coordinator agent responsible for orchestrating development tasks and delegating work to specialized agents. Analyze the user's request and determine the best approach: handle directly for simple tasks, or delegate to specialized agents for complex work.",
+      "description": "Coordinates work between specialized development agents",
+      "useFor": "Task orchestration, delegation, and general development assistance",
+      "delegationPermissions": {
+        "type": "all"
+      },
+      "toolPermissions": {
+        "type": "specific",
+        "tools": ["delegateWork", "reportOut", "workspace"]
+      }
     },
-    "toolPermissions": {
-      "type": "specific",
-      "tools": ["delegateWork", "reportOut", "workspace"]
-    }
-  },
-  "copilotMultiAgent.customAgents": [
     {
       "name": "code-reviewer",
       "systemPrompt": "You are a senior code reviewer with expertise in software engineering best practices, security, and code quality. Focus on identifying potential issues, suggesting improvements, and ensuring code follows established patterns and conventions. Provide specific, actionable feedback with examples when possible.",
